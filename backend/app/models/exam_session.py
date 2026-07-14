@@ -1,0 +1,28 @@
+from datetime import datetime
+from typing import List, TYPE_CHECKING, Optional
+from sqlalchemy import String, ForeignKey, DateTime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database.base import BaseEntity
+
+if TYPE_CHECKING:
+    from .user import User
+    from .exam import Exam
+    from .ai_session import AISession
+    from .violation import Violation
+
+class ExamSession(BaseEntity):
+    __tablename__ = "exam_sessions"
+    
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    ai_session_id: Mapped[Optional[int]] = mapped_column(ForeignKey("ai_sessions.id"), unique=True, nullable=True)
+    start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="PENDING", nullable=False)
+    
+    # Relationships
+    exam: Mapped["Exam"] = relationship("Exam", back_populates="sessions")
+    student: Mapped["User"] = relationship("User", back_populates="exam_sessions")
+    ai_session: Mapped[Optional["AISession"]] = relationship("AISession", back_populates="exam_session", single_parent=True, cascade="all, delete-orphan")
+    violations: Mapped[List["Violation"]] = relationship("Violation", back_populates="exam_session", cascade="all, delete-orphan")

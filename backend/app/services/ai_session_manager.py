@@ -7,13 +7,15 @@ from typing import Dict, Any, Optional
 
 from app.websocket.connection_manager import manager
 from app.websocket.websocket_events import WSEvent, WSEventType
+from app.schemas.ai_event import AIEventDTO
+from app.services.ai_event_processor import AIEventProcessor
 
 logger = logging.getLogger(__name__)
 
 class AIEngineThread(threading.Thread):
-    def __init__(self, exam_id: int, student_id: int, reference_embedding: list[float] = None):
+    def __init__(self, exam_session_id: int, student_id: int, reference_embedding: list[float] = None):
         super().__init__(daemon=True)
-        self.exam_id = exam_id
+        self.exam_session_id = exam_session_id
         self.student_id = student_id
         self.reference_embedding = reference_embedding
         self.running = False
@@ -43,34 +45,30 @@ class AIEngineThread(threading.Thread):
                 self.context.system_state = sys_state
                 
                 sess_info = self.context.session_info
-                sess_info.exam_id = str(self.exam_id)
+                sess_info.exam_id = str(self.exam_session_id)
                 sess_info.student_id = str(self.student_id)
                 sess_info.start_time = time.time()
                 self.context.session_info = sess_info
             
             self.event_bus = EventBus(async_dispatch=config.event_bus.async_dispatch, queue_size=config.event_bus.queue_size)
             
-            # Setup bridge to Websocket
+            # Setup bridge to Websocket and Event Processor
             def ws_bridge_callback(event):
-                ws_event = WSEvent(
-                    event=event.event_type.name,
-                    timestamp=datetime.fromtimestamp(event.timestamp),
-                    exam_session_id=self.exam_id,
-                    payload={
-                        "severity": event.severity.name,
-                        "source": event.source_module,
-                        "confidence": event.confidence,
-                        "description": event.payload.get("description", ""),
-                        "data": {k: v for k, v in event.payload.items() if k != "description"}
-                    }
+                dto = AIEventDTO(
+                    event_type=event.event_type.name,
+                    timestamp=event.timestamp,
+                    exam_session_id=self.exam_session_id,
+                    severity=event.severity.name,
+                    source_module=event.source_module,
+                    confidence=event.confidence,
+                    payload=event.payload
                 )
                 try:
-                    # Best-effort broadcast
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        asyncio.run_coroutine_threadsafe(manager.broadcast(ws_event), loop)
+                        asyncio.run_coroutine_threadsafe(AIEventProcessor.process_event(dto), loop)
                 except Exception as e:
-                    logger.error(f"Failed to bridge AI event to WS: {e}")
+                    logger.error(f"Failed to bridge AI event to Processor: {e}")
             
             self.event_bus.subscribe(None, ws_bridge_callback)
             self.event_bus.start()
@@ -161,38 +159,38 @@ class AISessionManager:
     _active_threads: Dict[int, AIEngineThread] = {}
 
     @classmethod
-    def initialize_session(cls, exam_id: int, student_id: int, reference_embedding: list[float] = None):
-        if exam_id in cls._active_threads:
-            logger.warning(f"AI Session already initialized for exam {exam_id}")
+    def initialize_session(cls, exam_session_id: int, student_id: int, reference_embedding: list[float] = None):
+        if exam_session_id in cls._active_threads:
+            logger.warning(f"AI Session already initialized for exam_session {exam_session_id}")
             return
             
-        logger.info(f"Initializing AI Session for exam {exam_id} (Student {student_id})")
-        thread = AIEngineThread(exam_id=exam_id, student_id=student_id, reference_embedding=reference_embedding)
-        cls._active_threads[exam_id] = thread
+        logger.info(f"Initializing AI Session for exam_session {exam_session_id} (Student {student_id})")
+        thread = AIEngineThread(exam_session_id=exam_session_id, student_id=student_id, reference_embedding=reference_embedding)
+        cls._active_threads[exam_session_id] = thread
 
     @classmethod
-    def start_session(cls, exam_id: int):
-        if exam_id in cls._active_threads:
-            logger.info(f"Starting AI Session thread for Exam {exam_id}")
-            cls._active_threads[exam_id].start()
+    def start_session(cls, exam_session_id: int):
+        if exam_session_id in cls._active_threads:
+            logger.info(f"Starting AI Session thread for ExamSession {exam_session_id}")
+            cls._active_threads[exam_session_id].start()
         else:
-            logger.error(f"Cannot start unknown AI Session {exam_id}")
+            logger.error(f"Cannot start unknown AI Session {exam_session_id}")
             # If not initialized, fallback to creating it with unknown student
-            cls.initialize_session(exam_id, 0)
-            cls.start_session(exam_id)
+            cls.initialize_session(exam_session_id, 0)
+            cls.start_session(exam_session_id)
         
     @classmethod
-    def pause_session(cls, exam_id: int):
-        logger.info(f"AI Session paused for Exam {exam_id}")
+    def pause_session(cls, exam_session_id: int):
+        logger.info(f"AI Session paused for ExamSession {exam_session_id}")
         # Not fully supported by simple thread model yet
         
     @classmethod
-    def resume_session(cls, exam_id: int):
-        logger.info(f"AI Session resumed for Exam {exam_id}")
+    def resume_session(cls, exam_session_id: int):
+        logger.info(f"AI Session resumed for ExamSession {exam_session_id}")
         
     @classmethod
-    def stop_session(cls, exam_id: int):
-        logger.info(f"Stopping AI Session for Exam {exam_id}")
-        if exam_id in cls._active_threads:
-            cls._active_threads[exam_id].stop()
-            del cls._active_threads[exam_id]
+    def stop_session(cls, exam_session_id: int):
+        logger.info(f"Stopping AI Session for ExamSession {exam_session_id}")
+        if exam_session_id in cls._active_threads:
+            cls._active_threads[exam_session_id].stop()
+            del cls._active_threads[exam_session_id]

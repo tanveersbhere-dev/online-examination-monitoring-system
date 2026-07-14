@@ -49,7 +49,7 @@ const router = createBrowserRouter([
     element: <StudentLayout />,
     children: [
       {
-        element: <ProtectedRoute allowedRoles={['STUDENT']} redirectPath="/student/login" />,
+        element: <ProtectedRoute allowedRoles={['Student']} redirectPath="/student/login" />,
         children: [
           { index: true, element: <TodaysExamsPage /> },
           { path: 'instructions', element: <ExamInstructionsPage /> },
@@ -74,7 +74,7 @@ const router = createBrowserRouter([
     element: <ExaminerLayout />,
     children: [
       {
-        element: <ProtectedRoute allowedRoles={['EXAMINER', 'ADMIN']} redirectPath="/examiner/login" />,
+        element: <ProtectedRoute allowedRoles={['Examiner', 'Admin']} redirectPath="/examiner/login" />,
         children: [
           { index: true, element: <Navigate to="/examiner/dashboard" replace /> },
           { path: 'dashboard', element: <DashboardPage /> },

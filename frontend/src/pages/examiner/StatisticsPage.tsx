@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   Box, Typography, Card, CardContent, Grid, Chip, Divider,
   Stack, Button, LinearProgress, FormControl, InputLabel, Select, MenuItem, CircularProgress, Alert
@@ -13,7 +15,6 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
-import axios from 'axios';
 
 interface ReportSummary {
   exam_session_id: number;
@@ -43,17 +44,14 @@ const StatisticsPage = () => {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:8000/api/v1/reports', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiClient.get('/reports');
       setReports(res.data);
       if (res.data.length > 0) {
         setSelectedSessionId(res.data[0].exam_session_id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load sessions for statistics.");
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -62,14 +60,11 @@ const StatisticsPage = () => {
   const fetchReportDetail = async (id: number) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:8000/api/v1/reports/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiClient.get(`/reports/${id}`);
       setReportDetail(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load statistics for the selected session.");
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

@@ -21,6 +21,7 @@ import LoginIcon from '@mui/icons-material/Login';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
 import { useState, useEffect } from 'react';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 interface Exam {
   id: number;
@@ -58,8 +59,8 @@ const TodaysExamsPage = () => {
           return exam.scheduled_start.startsWith(todayStr);
         });
         setExams(todaysExams);
-      } catch (error) {
-        console.error("Failed to fetch today's exams", error);
+      } catch (error: any) {
+        console.error("Failed to fetch today's exams", getErrorMessage(error));
       } finally {
         setLoading(false);
       }

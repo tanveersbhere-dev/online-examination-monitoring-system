@@ -1,7 +1,7 @@
 import os
 import uuid
 import logging
-from typing import List
+from typing import List, Optional
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -142,8 +142,31 @@ class ExamService:
         except EntityNotFoundError:
             raise ExamNotFoundError(f"Exam {exam_id} not found.")
 
-    async def get_all_exams(self, skip: int = 0, limit: int = 100) -> List[ExamResponse]:
-        exams = await self.exam_repo.get_all(skip=skip, limit=limit)
+    async def get_all_exams(
+        self, 
+        skip: int = 0, 
+        limit: int = 100, 
+        course_name: Optional[str] = None, 
+        status: Optional[str] = None
+    ) -> List[ExamResponse]:
+        exams = await self.exam_repo.get_all(skip=skip, limit=limit, course_name=course_name, status=status)
+        
+        # Get assigned students counts
+        counts = await self.db.execute(select(ExamSession.exam_id, func.count(ExamSession.id)).group_by(ExamSession.exam_id))
+        count_map = {row[0]: row[1] for row in counts.all()}
+        
+        responses = []
+        for e in exams:
+            resp = ExamResponse.model_validate(e)
+            resp.assigned_students_count = count_map.get(e.id, 0)
+            resp.ai_session_status = "ACTIVE" if e.status in ["RUNNING", "PAUSED"] else "INACTIVE"
+            responses.append(resp)
+        return responses
+
+    async def get_upcoming_exams(self, skip: int = 0, limit: int = 100) -> List[ExamResponse]:
+        from datetime import datetime, timezone
+        current_time = datetime.now(timezone.utc)
+        exams = await self.exam_repo.get_upcoming_exams(current_time=current_time, skip=skip, limit=limit)
         
         # Get assigned students counts
         counts = await self.db.execute(select(ExamSession.exam_id, func.count(ExamSession.id)).group_by(ExamSession.exam_id))

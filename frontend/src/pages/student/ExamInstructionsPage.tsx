@@ -32,7 +32,9 @@ import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import WebcamIcon from '@mui/icons-material/Videocam';
 import MouseIcon from '@mui/icons-material/Mouse';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ShieldIcon from '@mui/icons-material/Shield';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 const RULES = [
   'You must be alone in the room throughout the examination.',
@@ -90,7 +92,7 @@ const ExamInstructionsPage = () => {
         const response = await apiClient.get(`/exams/${examId}`);
         setExam(response.data);
       } catch (err: any) {
-        setError(err.response?.data?.detail || "Failed to load examination details.");
+        setError(getErrorMessage(err));
       } finally {
         setLoading(false);
       }

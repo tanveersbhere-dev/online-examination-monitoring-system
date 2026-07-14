@@ -34,6 +34,10 @@ class QuestionPaperError(ExamManagementError):
     """Raised when a question paper operation fails (e.g., file not found)."""
     pass
 
+class QuestionPaperNotFoundError(QuestionPaperError):
+    """Raised when a question paper is not found."""
+    pass
+
 class ScheduleConflictError(ExamManagementError):
     """Raised when an exam schedule conflicts with another exam."""
     pass

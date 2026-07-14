@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   Box,
   Typography,
@@ -42,6 +43,11 @@ const StudentLoginPage = () => {
       setError('Please enter both email and password.');
       return;
     }
+
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -65,13 +71,7 @@ const StudentLoginPage = () => {
       const from = location.state?.from?.pathname || '/student';
       navigate(from, { replace: true });
     } catch (err: any) {
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        setError(err.response.data.detail || 'Invalid email or password.');
-      } else if (err.code === 'ERR_NETWORK') {
-        setError('Cannot connect to server. Please ensure backend is running.');
-      } else {
-        setError('An unexpected error occurred. Please try again later.');
-      }
+      setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import apiClient from '../../services/apiClient';
+import { WebSocketClient } from '../../services/wsClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   Box, Typography, Grid, Card, CardContent, Chip, LinearProgress,
   Divider, Stack, Button, List, ListItem, ListItemText, Paper,
@@ -15,7 +18,6 @@ import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import FaceIcon from '@mui/icons-material/Face';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import axios from 'axios';
 
 interface ViolationEvent {
   type: string;
@@ -43,16 +45,13 @@ const LiveMonitoringPage = () => {
   ]);
   const [detectedObjects, setDetectedObjects] = useState<{name: string, conf: number}[]>([]);
   
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<WebSocketClient | null>(null);
 
   useEffect(() => {
     // Attempt to load current status first
     const fetchStatus = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`http://localhost:8000/api/v1/monitoring/current?exam_session_id=${examId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await apiClient.get(`/monitoring/current?exam_session_id=${examId}`);
         if (res.data) {
           setRiskScore(res.data.current_risk_score || 0);
           setViolations(res.data.active_violations?.map((v: any) => ({
@@ -61,20 +60,19 @@ const LiveMonitoringPage = () => {
             severity: v.severity.toLowerCase()
           })) || []);
         }
-      } catch (err) {
-        console.error("Could not fetch initial status", err);
+      } catch (err: any) {
+        console.error("Could not fetch initial status", getErrorMessage(err));
       }
     };
     
     fetchStatus();
 
     // Connect WebSocket
-    const ws = new WebSocket(`ws://localhost:8000/ws/monitoring/${examId}`);
+    const ws = new WebSocketClient(parseInt(examId));
     wsRef.current = ws;
 
-    ws.onmessage = (event) => {
+    ws.onMessage((data) => {
       try {
-        const data = JSON.parse(event.data);
         const timeStr = new Date().toLocaleTimeString();
         
         // Always add to timeline if it's an event
@@ -124,12 +122,14 @@ const LiveMonitoringPage = () => {
       } catch (e) {
         console.error("WS Parse Error", e);
       }
-    };
+    });
+
+    ws.connect();
 
     return () => {
-      if (wsRef.current) wsRef.current.close();
+      if (wsRef.current) wsRef.current.disconnect();
     };
-  }, [examId]);
+  }, [examId, facesCount]);
 
   const riskLabel = riskScore > 75 ? 'CRITICAL' : riskScore > 50 ? 'HIGH' : riskScore > 25 ? 'MEDIUM' : 'LOW';
   const riskColor = riskScore > 75 ? '#B00020' : riskScore > 50 ? '#E65100' : riskScore > 25 ? '#F57C00' : '#2E7D32';

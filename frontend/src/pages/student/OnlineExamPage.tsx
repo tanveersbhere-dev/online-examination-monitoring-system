@@ -30,7 +30,8 @@ import TimerIcon from '@mui/icons-material/Timer';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
+import { WebSocketClient } from '../../services/wsClient';
 
 interface Question {
   id: string;
@@ -54,26 +55,24 @@ const OnlineExamPage = () => {
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours default
   
   const videoRef = useRef<HTMLVideoElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<WebSocketClient | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
 
   useEffect(() => {
     // 1. Fetch questions and start session
     const initializeExam = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { Authorization: `Bearer ${token}` };
-        
         // Fetch questions
-        const qRes = await axios.get(`http://localhost:8000/api/v1/exams/${examId}/questions`, { headers });
+        const qRes = await apiClient.get(`/exams/${examId}/questions`);
         setQuestions(qRes.data.questions);
         
         // Start Exam / AI Session
-        await axios.patch(`http://localhost:8000/api/v1/exams/${examId}/start`, {}, { headers });
+        await apiClient.patch(`/exams/${examId}/start`);
         
-        // Connect WebSocket for live monitoring (Backend uses it for examiner events, but student connects to register session if needed)
-        wsRef.current = new WebSocket(`ws://localhost:8000/ws/monitoring/${examId}`);
-        wsRef.current.onopen = () => console.log('Monitoring WS Connected');
+        // Connect WebSocket for live monitoring
+        const ws = new WebSocketClient(parseInt(examId));
+        wsRef.current = ws;
+        ws.connect();
         
         // Request Camera
         try {
@@ -109,7 +108,7 @@ const OnlineExamPage = () => {
 
     return () => {
       clearInterval(timer);
-      if (wsRef.current) wsRef.current.close();
+      if (wsRef.current) wsRef.current.disconnect();
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       }
@@ -161,10 +160,7 @@ const OnlineExamPage = () => {
 
   const handleSubmit = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`http://localhost:8000/api/v1/exams/${examId}/complete`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await apiClient.patch(`/exams/${examId}/complete`);
       setSubmitOpen(false);
       navigate('/student/submitted');
     } catch (err) {

@@ -30,6 +30,6 @@ async def check_health(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         "status": "online",
         "version": "1.0.0",
         "database": db_status,
-        "ai_engine": "enabled" if settings.AI_ENGINE_ENABLED else "disabled",
+        "ai_engine": "online",
         "environment": "debug" if settings.DEBUG else "production"
     }

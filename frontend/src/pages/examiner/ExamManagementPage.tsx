@@ -16,6 +16,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 const STATUS_CONFIG: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' }> = {
   DRAFT: { label: 'Draft', color: 'default' },
@@ -81,7 +82,7 @@ const ExamManagementPage = () => {
       const res = await apiClient.get('/exams');
       setExams(res.data);
     } catch (err: any) {
-      setError("Failed to fetch examinations.");
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ const ExamManagementPage = () => {
       await apiClient.patch(`/exams/${examId}/${action}`);
       fetchExams();
     } catch (err: any) {
-      alert(err.response?.data?.detail || `Failed to ${action} examination.`);
+      alert(getErrorMessage(err));
     }
   };
 
@@ -108,11 +109,16 @@ const ExamManagementPage = () => {
       setOpenCreate(true);
       setError(null);
     } catch (err) {
-      alert("Failed to load question papers. Please ensure you have uploaded at least one.");
+      alert(getErrorMessage(err));
     }
   };
 
   const handleCreateSubmit = async () => {
+    if (!createData.title || !createData.course_name || !createData.question_paper_id || !createData.date || !createData.start_time || !createData.end_time || !createData.duration_minutes) {
+      setError("Please fill out all required fields.");
+      return;
+    }
+    
     try {
       setSubmitting(true);
       setError(null);
@@ -131,7 +137,7 @@ const ExamManagementPage = () => {
       setCreateData({ title: '', course_name: '', question_paper_id: '', date: '', start_time: '', end_time: '', duration_minutes: 120 });
       fetchExams();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Validation failed or scheduling conflict occurred.");
+      setError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -147,7 +153,7 @@ const ExamManagementPage = () => {
       setOpenAssign(true);
       setError(null);
     } catch (err) {
-      alert("Failed to fetch students.");
+      alert(getErrorMessage(err));
     }
   };
 
@@ -166,7 +172,7 @@ const ExamManagementPage = () => {
       setOpenAssign(false);
       fetchExams();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to assign students.");
+      setError(getErrorMessage(err));
     } finally {
       setAssigning(false);
     }

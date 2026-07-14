@@ -11,6 +11,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 interface QuestionPaper {
   id: number;
@@ -39,10 +40,10 @@ const QuestionPapersPage = () => {
   const fetchPapers = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/exams/question-papers');
+      const res = await apiClient.get('/question-papers');
       setPapers(res.data);
-    } catch (err) {
-      console.error('Failed to fetch question papers', err);
+    } catch (err: any) {
+      console.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -66,7 +67,7 @@ const QuestionPapersPage = () => {
     formData.append('file', file);
 
     try {
-      await apiClient.post('/exams/question-paper', formData, {
+      await apiClient.post('/question-papers', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setOpenModal(false);
@@ -75,7 +76,7 @@ const QuestionPapersPage = () => {
       setFile(null);
       fetchPapers();
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to upload question paper.");
+      setError(getErrorMessage(err));
     } finally {
       setUploading(false);
     }
@@ -84,10 +85,10 @@ const QuestionPapersPage = () => {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this question paper?")) return;
     try {
-      await apiClient.delete(`/exams/question-paper/${id}`);
+      await apiClient.delete(`/question-papers/${id}`);
       fetchPapers();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to delete question paper.");
+      alert(getErrorMessage(err));
     }
   };
 

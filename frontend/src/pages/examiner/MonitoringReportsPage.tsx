@@ -8,8 +8,10 @@ import DownloadIcon from '@mui/icons-material/Download';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import FaceIcon from '@mui/icons-material/Face';
+import DescriptionIcon from '@mui/icons-material/Description';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 interface ReportSummary {
   exam_session_id: number;
@@ -59,14 +61,11 @@ const MonitoringReportsPage = () => {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:8000/api/v1/reports', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiClient.get('/reports');
       setReports(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load reports. Please check if the server is running.");
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -79,14 +78,11 @@ const MonitoringReportsPage = () => {
     setError(null);
     setSelectedViolationId(null);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:8000/api/v1/reports/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiClient.get(`/reports/${id}`);
       setReportDetail(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load report details.");
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

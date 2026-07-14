@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,12 +95,25 @@ async def create_exam(
 async def get_exams(
     skip: int = 0,
     limit: int = 100,
+    course_name: Optional[str] = None,
+    status: Optional[str] = None,
     current_user: UserResponse = RequireAuthenticated,
     db: AsyncSession = Depends(get_db)
 ):
     """List all exams. Requires valid authentication."""
     service = ExamService(db)
-    return await service.get_all_exams(skip=skip, limit=limit)
+    return await service.get_all_exams(skip=skip, limit=limit, course_name=course_name, status=status)
+
+@router.get("/upcoming", response_model=List[ExamResponse])
+async def get_upcoming_exams(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: UserResponse = RequireAuthenticated,
+    db: AsyncSession = Depends(get_db)
+):
+    """List upcoming scheduled exams."""
+    service = ExamService(db)
+    return await service.get_upcoming_exams(skip=skip, limit=limit)
 
 @router.get("/{exam_id}", response_model=ExamResponse)
 async def get_exam(

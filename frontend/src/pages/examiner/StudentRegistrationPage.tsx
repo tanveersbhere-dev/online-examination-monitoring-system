@@ -15,6 +15,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import apiClient from '../../services/apiClient';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 interface ExamOption {
   id: number;
@@ -52,9 +53,9 @@ const StudentRegistrationPage = () => {
       try {
         const response = await apiClient.get('/exams');
         setExamsList(response.data);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to fetch exams', err);
-        setError('Failed to load examinations list. Please refresh the page.');
+        setError(getErrorMessage(err));
       } finally {
         setIsLoadingExams(false);
       }
@@ -94,6 +95,11 @@ const StudentRegistrationPage = () => {
       return;
     }
 
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     setRegistrationStep(0); // Uploading & Processing
@@ -125,14 +131,10 @@ const StudentRegistrationPage = () => {
       });
       
     } catch (err: any) {
-      if (err.response?.status === 409) {
-        setError('A student with this email is already registered for this exam.');
-      } else if (err.response?.status === 400) {
-        setError(err.response.data.detail || 'Registration failed due to invalid data (e.g. no face detected in image).');
-      } else if (err.response?.status === 502) {
+      if (err.response?.status === 502) {
         setError('Student was registered, but email delivery failed. Please resend credentials manually.');
       } else {
-        setError(err.response?.data?.detail || 'An unexpected error occurred during registration.');
+        setError(getErrorMessage(err));
       }
     } finally {
       setSubmitting(false);

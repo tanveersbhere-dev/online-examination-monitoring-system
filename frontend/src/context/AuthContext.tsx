@@ -6,6 +6,8 @@ interface User {
   email: string;
   full_name: string;
   is_active: boolean;
+  profile_picture_url?: string;
+  phone_number?: string;
   role: {
     id: number;
     name: string;

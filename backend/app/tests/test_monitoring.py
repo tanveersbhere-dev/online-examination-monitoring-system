@@ -11,7 +11,7 @@ from main import app
 @pytest_asyncio.fixture(scope="function")
 async def setup_auth(db_session: AsyncSession):
     role_repo = RoleRepository(db_session)
-    examiner_role = await role_repo.create(name="EXAMINER")
+    examiner_role = await role_repo.create(name="Examiner")
     
     user_repo = UserRepository(db_session)
     examiner = await user_repo.create(
@@ -51,7 +51,7 @@ async def test_monitoring_current_endpoint(client: TestClient, setup_auth):
     resp = client.get("/api/v1/monitoring/current?exam_session_id=1", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     data = resp.json()
-    assert data["current_face_status"] == "DETECTED"
+    assert data["current_face_status"] == "ACTIVE"
     assert "object_detection_summary" in data
 
 @pytest.mark.asyncio

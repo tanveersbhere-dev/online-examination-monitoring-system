@@ -194,6 +194,10 @@ const MonitoringReportsPage = () => {
     );
   }
 
+  const handleDownloadPDF = () => {
+    window.print();
+  };
+
   const { student_info, exam_info, session_summary, risk_summary, timeline, evidence_gallery, recommendation } = reportDetail;
   const riskColor = risk_summary.highest_risk_level === 'CRITICAL' ? '#B00020' : risk_summary.highest_risk_level === 'HIGH' ? '#E65100' : risk_summary.highest_risk_level === 'MEDIUM' ? '#F57C00' : '#2E7D32';
 
@@ -202,12 +206,18 @@ const MonitoringReportsPage = () => {
     : evidence_gallery;
 
   return (
-    <Box>
-      <Button startIcon={<ArrowBackIcon />} onClick={handleBack} sx={{ mb: 3 }}>Back to Reports</Button>
+    <Box sx={{
+      '@media print': {
+        '.no-print': { display: 'none !important' },
+        'body': { backgroundColor: '#fff' },
+        '.MuiCard-root': { boxShadow: 'none', border: '1px solid #e0e0e0', pageBreakInside: 'avoid' }
+      }
+    }}>
+      <Button className="no-print" startIcon={<ArrowBackIcon />} onClick={handleBack} sx={{ mb: 3 }}>Back to Reports</Button>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" fontWeight={600}>Monitoring Report</Typography>
-        <Button variant="contained" startIcon={<DownloadIcon />} sx={{ borderRadius: 2 }}>
+        <Button className="no-print" variant="contained" startIcon={<DownloadIcon />} sx={{ borderRadius: 2 }} onClick={handleDownloadPDF}>
           Download PDF
         </Button>
       </Box>

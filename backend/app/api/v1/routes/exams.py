@@ -6,6 +6,7 @@ from app.database.session import get_db
 from app.security.permissions import RequireExaminer, RequireAuthenticated
 from app.security.dependencies import get_current_user
 from app.schemas.exam import ExamCreate, ExamUpdate, ExamResponse, QuestionPaperResponse, AssignStudentsRequest
+from app.schemas.runtime_rules import RuntimeRulesUpdate
 from app.schemas.user_auth import UserResponse
 from app.services.exam_service import ExamService
 from app.services.exceptions import ExamNotFoundError, InvalidExamStateError, ScheduleConflictError, QuestionPaperError, AISessionError
@@ -13,64 +14,6 @@ from app.repositories.exceptions import EntityNotFoundError
 
 router = APIRouter()
 
-# --- QUESTION PAPERS ---
-
-@router.post("/question-paper", response_model=QuestionPaperResponse, status_code=status.HTTP_201_CREATED)
-async def upload_question_paper(
-    title: str = Form(...),
-    course_name: str = Form(...),
-    file: UploadFile = File(...),
-    current_user: UserResponse = RequireExaminer,
-    db: AsyncSession = Depends(get_db)
-):
-    """Upload a new question paper. Requires EXAMINER role."""
-    try:
-        service = ExamService(db)
-        return await service.upload_paper(
-            title=title,
-            course_name=course_name,
-            uploader_id=current_user.id,
-            file=file
-        )
-    except QuestionPaperError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-@router.get("/question-paper/{paper_id}", response_model=QuestionPaperResponse)
-async def get_question_paper(
-    paper_id: int,
-    current_user: UserResponse = RequireExaminer,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get a specific question paper."""
-    try:
-        service = ExamService(db)
-        return await service.get_paper(paper_id)
-    except EntityNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-@router.get("/question-papers", response_model=List[QuestionPaperResponse])
-async def get_all_question_papers(
-    skip: int = 0,
-    limit: int = 100,
-    current_user: UserResponse = RequireExaminer,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get all question papers. Requires EXAMINER role."""
-    service = ExamService(db)
-    return await service.get_all_papers(skip=skip, limit=limit)
-
-@router.delete("/question-paper/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_question_paper(
-    paper_id: int,
-    current_user: UserResponse = RequireExaminer,
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete a question paper. Requires EXAMINER role."""
-    try:
-        service = ExamService(db)
-        await service.delete_paper(paper_id)
-    except EntityNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 # --- EXAMS ---
 
@@ -145,6 +88,22 @@ async def update_exam(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ScheduleConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+@router.put("/{exam_id}/runtime-rules", response_model=ExamResponse)
+async def update_runtime_rules(
+    exam_id: int,
+    rules_in: RuntimeRulesUpdate,
+    current_user: UserResponse = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update runtime rules configuration. Requires EXAMINER role."""
+    try:
+        service = ExamService(db)
+        return await service.update_runtime_rules(exam_id=exam_id, creator_id=current_user.id, rules_in=rules_in)
+    except ExamNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 

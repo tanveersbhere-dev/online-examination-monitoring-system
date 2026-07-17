@@ -37,6 +37,8 @@ class ExamUpdate(BaseModel):
 class AssignStudentsRequest(BaseModel):
     student_ids: List[int]
 
+from app.schemas.runtime_rules import SectionRuleResponse
+
 class ExamResponse(BaseModel):
     id: int
     title: str
@@ -49,8 +51,21 @@ class ExamResponse(BaseModel):
     question_paper: Optional[QuestionPaperResponse] = None
     created_at: datetime
     updated_at: datetime
-    ai_session_status: str = "INACTIVE" # Appended for UI convenience, usually inferred from state
+    ai_session_status: str = "INACTIVE"
     assigned_students_count: int = 0
+    
+    # Level 1 Rules
+    allow_resume_after_disconnect: bool = True
+    global_navigation: str = "FREE"
+    randomize_sections: bool = False
+    randomize_questions: bool = False
+    allow_review_before_submit: bool = True
+    show_remaining_time: bool = True
+    show_question_numbers: bool = True
+    show_marks: bool = True
+    
+    # Level 2 & 3 Rules
+    section_rules: List[SectionRuleResponse] = []
 
     class Config:
         from_attributes = True

@@ -1,382 +1,231 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Box, Typography, Card, CardContent, Button, TextField, Grid,
-  Divider, Stack, InputAdornment, Paper, Alert, Stepper,
-  Step, StepLabel, CircularProgress,
+  Box, Typography, Button, Paper, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, TablePagination,
+  IconButton, TextField, Chip, Checkbox, Menu, MenuItem, Tooltip
 } from '@mui/material';
-import PersonIcon from '@mui/icons-material/Person';
-import EmailIcon from '@mui/icons-material/Email';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import CameraAltIcon from '@mui/icons-material/CameraAlt';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
-import FaceIcon from '@mui/icons-material/Face';
-import SendIcon from '@mui/icons-material/Send';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import AddIcon from '@mui/icons-material/Add';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import SearchIcon from '@mui/icons-material/Search';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+
 import apiClient from '../../services/apiClient';
-import { getErrorMessage } from '../../utils/errorHandler';
+import StudentFormDialog from '../../components/students/StudentFormDialog';
+import ImportWizardDialog from '../../components/students/ImportWizardDialog';
+import StudentProfileDrawer from '../../components/students/StudentProfileDrawer';
 
-interface ExamOption {
-  id: number;
-  course_name: string;
-  course_code: string;
-}
-
-interface RegistrationSuccessData {
-  full_name: string;
-  email: string;
-  username: string;
-  exam_name: string;
-}
-
-const StudentRegistrationPage = () => {
-  const [fullName, setFullName] = useState('');
-  const [fatherName, setFatherName] = useState('');
-  const [email, setEmail] = useState('');
-  const [exam, setExam] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+export default function StudentRegistrationPage() {
+  const [students, setStudents] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const [examsList, setExamsList] = useState<ExamOption[]>([]);
-  const [isLoadingExams, setIsLoadingExams] = useState(true);
-  
-  const [submitting, setSubmitting] = useState(false);
-  const [successData, setSuccessData] = useState<RegistrationSuccessData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [registrationStep, setRegistrationStep] = useState(0);
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dialogs
+  const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  
+  // Current Student for Edit/View
+  const [currentStudent, setCurrentStudent] = useState<any>(null);
+
+  const fetchStudents = async () => {
+    try {
+      const res = await apiClient.get('/workspace/students', {
+        params: {
+          skip: page * rowsPerPage,
+          limit: rowsPerPage,
+          search: searchQuery || undefined
+        }
+      });
+      setStudents(res.data.items);
+      setTotal(res.data.total);
+    } catch (err) {
+      console.error("Failed to load students", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchExams = async () => {
-      try {
-        const response = await apiClient.get('/exams');
-        setExamsList(response.data);
-      } catch (err: any) {
-        console.error('Failed to fetch exams', err);
-        setError(getErrorMessage(err));
-      } finally {
-        setIsLoadingExams(false);
-      }
-    };
-    fetchExams();
-  }, []);
+    fetchStudents();
+  }, [page, rowsPerPage, searchQuery]);
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      
-      // Validation
-      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-        setError('Please upload a valid JPG or PNG image.');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image file size must be less than 5MB.');
-        return;
-      }
-      
-      setError(null);
-      setPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file));
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      setSelectedIds(students.map(s => s.id));
+    } else {
+      setSelectedIds([]);
     }
   };
 
-  const handleBoxClick = () => {
-    if (!photo && fileInputRef.current) {
-      fileInputRef.current.click();
+  const handleSelectOne = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleSaveStudent = async (data: any) => {
+    if (currentStudent) {
+      await apiClient.put(`/workspace/students/${currentStudent.id}`, data);
+    } else {
+      await apiClient.post('/workspace/students', data);
+    }
+    fetchStudents();
+  };
+
+  const handleArchive = async (id: number) => {
+    if (window.confirm("Are you sure you want to archive this student?")) {
+      await apiClient.delete(`/workspace/students/${id}`);
+      fetchStudents();
     }
   };
 
-  const handleSubmit = async () => {
-    if (!fullName || !email || !exam || !photo) {
-      setError('Please fill out all required fields.');
-      return;
-    }
-
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setRegistrationStep(0); // Uploading & Processing
-
-    const formData = new FormData();
-    formData.append('full_name', fullName);
-    formData.append('email', email);
-    formData.append('exam_id', exam);
-    if (fatherName) {
-      formData.append('father_name', fatherName);
-    }
-    formData.append('face_image', photo);
-
-    try {
-      // The backend does processing synchronously, so we will step up as it goes
-      setRegistrationStep(1); // Enrolling face
-      const response = await apiClient.post('/students/register', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      
-      setRegistrationStep(2); // Success/Emails sent
-
-      const selectedExam = examsList.find(e => e.id.toString() === exam);
-      setSuccessData({
-        full_name: response.data.full_name,
-        email: response.data.email,
-        username: response.data.username,
-        exam_name: selectedExam ? `${selectedExam.course_name} (${selectedExam.course_code})` : 'Unknown Exam'
-      });
-      
-    } catch (err: any) {
-      if (err.response?.status === 502) {
-        setError('Student was registered, but email delivery failed. Please resend credentials manually.');
-      } else {
-        setError(getErrorMessage(err));
-      }
-    } finally {
-      setSubmitting(false);
+  const handleBulkAction = async (action: string) => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`Are you sure you want to ${action.toLowerCase()} ${selectedIds.length} students?`)) {
+      await apiClient.post('/workspace/students/bulk-action', { student_ids: selectedIds, action });
+      setSelectedIds([]);
+      fetchStudents();
     }
   };
-
-  const handleReset = () => {
-    setSuccessData(null);
-    setFullName('');
-    setFatherName('');
-    setEmail('');
-    setExam('');
-    setPhoto(null);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(null);
-    setRegistrationStep(0);
-    setError(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const PROCESS_STEPS = ['Uploading data', 'Processing face enrollment', 'Sending credentials by email'];
-
-  if (successData) {
-    return (
-      <Box>
-        <Typography variant="h4" fontWeight={600} sx={{ mb: 4 }}>Student Registration</Typography>
-        <Card elevation={1} sx={{ maxWidth: 600 }}>
-          <CardContent sx={{ p: 4, textAlign: 'center' }}>
-            <CheckCircleIcon sx={{ fontSize: 72, color: 'success.main', mb: 2 }} />
-            <Typography variant="h5" fontWeight={600} color="success.main" gutterBottom>
-              Registration Complete
-            </Typography>
-            <Divider sx={{ my: 3 }} />
-            <Stack spacing={1.5} sx={{ textAlign: 'left', mb: 3 }}>
-              {[
-                { label: 'Student', value: successData.full_name },
-                { label: 'Username', value: successData.username },
-                { label: 'Exam', value: successData.exam_name },
-                { label: 'Credentials sent to', value: successData.email },
-              ].map((row) => (
-                <Box key={row.label} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">{row.label}</Typography>
-                  <Typography variant="body2" fontWeight={600}>{row.value}</Typography>
-                </Box>
-              ))}
-            </Stack>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-              <Button variant="outlined" onClick={handleReset} startIcon={<PersonAddIcon />}>
-                Register Another Student
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
-    );
-  }
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={600} sx={{ mb: 4 }}>Student Registration</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" fontWeight="bold">Student Repository</Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>
+            Import CSV
+          </Button>
+          <Button variant="outlined" startIcon={<FileDownloadIcon />}>
+            Export
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setCurrentStudent(null); setFormOpen(true); }}>
+            Add Student
+          </Button>
+        </Box>
+      </Box>
 
-      <Grid container spacing={4}>
-        {/* Form */}
-        <Grid item xs={12} md={7}>
-          <Card elevation={1}>
-            <CardContent sx={{ p: 3 }}>
-              
-              {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  {error}
-                </Alert>
-              )}
+      <Paper sx={{ mb: 2, p: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+        <TextField
+          size="small"
+          placeholder="Search by name, reg no, email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{ startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} /> }}
+          sx={{ width: 300 }}
+        />
+        {/* Future Filters could go here */}
+        
+        {selectedIds.length > 0 && (
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="primary">{selectedIds.length} selected</Typography>
+            <Button size="small" variant="contained" color="warning" onClick={() => handleBulkAction('ARCHIVE')}>
+              Archive Selected
+            </Button>
+          </Box>
+        )}
+      </Paper>
 
-              <Stack spacing={3}>
-                <TextField
-                  label="Full Name *"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={submitting}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
+      <TableContainer component={Paper}>
+        <Table sx={{ minWidth: 650 }} size="small">
+          <TableHead sx={{ bgcolor: 'grey.50' }}>
+            <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selectedIds.length > 0 && selectedIds.length < students.length}
+                  checked={students.length > 0 && selectedIds.length === students.length}
+                  onChange={handleSelectAll}
                 />
-                <TextField
-                  label="Father Name"
-                  value={fatherName}
-                  onChange={(e) => setFatherName(e.target.value)}
-                  disabled={submitting}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
-                />
-                <TextField
-                  label="Email Address *"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={submitting}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
-                />
-                <TextField
-                  label="Assign Examination *"
-                  select
-                  value={exam}
-                  onChange={(e) => setExam(e.target.value)}
-                  disabled={submitting || isLoadingExams}
-                  SelectProps={{ native: true }}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><AssignmentIcon fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment> }}
-                >
-                  <option value="">{isLoadingExams ? 'Loading exams...' : 'Select examination...'}</option>
-                  {examsList.map((examOpt) => (
-                    <option key={examOpt.id} value={examOpt.id}>
-                      {examOpt.course_name} — {examOpt.course_code}
-                    </option>
-                  ))}
-                </TextField>
+              </TableCell>
+              <TableCell>Registration No</TableCell>
+              <TableCell>Full Name</TableCell>
+              <TableCell>Email</TableCell>
+              <TableCell>Department</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {students.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">No students found.</Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              students.map((row) => (
+                <TableRow key={row.id} hover selected={selectedIds.includes(row.id)}>
+                  <TableCell padding="checkbox">
+                    <Checkbox checked={selectedIds.includes(row.id)} onChange={() => handleSelectOne(row.id)} />
+                  </TableCell>
+                  <TableCell>{row.registration_number}</TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>{row.full_name}</TableCell>
+                  <TableCell>{row.email}</TableCell>
+                  <TableCell>{row.department || '-'}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={row.status} 
+                      size="small" 
+                      color={row.status === 'ACTIVE' ? 'success' : row.status === 'ARCHIVED' ? 'default' : 'warning'} 
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title="View Profile">
+                      <IconButton size="small" onClick={() => { setCurrentStudent(row); setProfileOpen(true); }}>
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Edit">
+                      <IconButton size="small" onClick={() => { setCurrentStudent(row); setFormOpen(true); }}>
+                        <EditIcon fontSize="small" color="primary" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Archive">
+                      <IconButton size="small" onClick={() => handleArchive(row.id)}>
+                        <ArchiveIcon fontSize="small" color="error" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50]}
+          component="div"
+          count={total}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+        />
+      </TableContainer>
 
-                {/* Face Photo Upload */}
-                <Box>
-                  <Typography variant="body2" fontWeight={500} gutterBottom>
-                    Passport Style Photo *
-                  </Typography>
-                  <input 
-                    type="file" 
-                    accept="image/jpeg, image/png, image/jpg" 
-                    style={{ display: 'none' }} 
-                    ref={fileInputRef} 
-                    onChange={handlePhotoSelect}
-                    disabled={submitting}
-                  />
-                  {!photoPreview ? (
-                    <Box
-                      sx={{
-                        border: '2px dashed', borderColor: 'divider',
-                        borderRadius: 2, p: 4, textAlign: 'center',
-                        cursor: submitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
-                        '&:hover': { borderColor: submitting ? 'divider' : 'primary.main', backgroundColor: submitting ? 'transparent' : 'primary.light', opacity: submitting ? 1 : 0.05 },
-                      }}
-                      onClick={handleBoxClick}
-                    >
-                      <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Click to upload a photo
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        JPG or PNG • Max 5MB • Passport-style (face clearly visible)
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box
-                        sx={{
-                          width: 80, height: 100, borderRadius: 2,
-                          backgroundColor: '#E3F2FD',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          border: '1px solid', borderColor: 'primary.light',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <img src={photoPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </Box>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>{photo?.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{(photo!.size / 1024).toFixed(1)} KB • Ready for enrollment</Typography>
-                        <br />
-                        <Button size="small" onClick={() => fileInputRef.current?.click()} sx={{ p: 0, mt: 0.5 }} disabled={submitting}>
-                          Change Photo
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Photo must clearly show the student's face. Remove glasses and hats if possible.
-                  </Typography>
-                </Box>
+      {/* Dialogs */}
+      <StudentFormDialog 
+        open={formOpen} 
+        onClose={() => setFormOpen(false)} 
+        initialData={currentStudent}
+        onSubmit={handleSaveStudent} 
+      />
+      
+      <ImportWizardDialog 
+        open={importOpen} 
+        onClose={() => setImportOpen(false)} 
+        onSuccess={fetchStudents} 
+      />
 
-                {/* Registration progress steps */}
-                {submitting && (
-                  <Box>
-                    <Stepper activeStep={registrationStep} orientation="vertical">
-                      {PROCESS_STEPS.map((label, idx) => (
-                        <Step key={label} completed={registrationStep > idx}>
-                          <StepLabel
-                            icon={registrationStep === idx ? <CircularProgress size={20} thickness={5} /> : undefined}
-                          >
-                            <Typography variant="body2">{label}...</Typography>
-                          </StepLabel>
-                        </Step>
-                      ))}
-                    </Stepper>
-                  </Box>
-                )}
-
-                <Button
-                  variant="contained"
-                  size="large"
-                  disabled={!fullName || !email || !exam || !photo || submitting}
-                  onClick={handleSubmit}
-                  startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
-                  sx={{ borderRadius: 2 }}
-                >
-                  {submitting ? 'Registering...' : 'Register Student'}
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Info Panel */}
-        <Grid item xs={12} md={5}>
-          <Card elevation={0} sx={{ backgroundColor: '#E3F2FD', border: '1px solid #BBDEFB' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                What happens after registration?
-              </Typography>
-              <Divider sx={{ mb: 3 }} />
-              <Stack spacing={3}>
-                {[
-                  { icon: <VpnKeyIcon color="primary" />, step: '1', title: 'Credential Generation', desc: 'A unique username and secure password are automatically generated. Credentials are never stored in plain text.' },
-                  { icon: <FaceIcon color="primary" />, step: '2', title: 'Face Enrollment', desc: 'The uploaded photo is processed to create a biometric reference used for continuous identity verification during the exam.' },
-                  { icon: <SendIcon color="primary" />, step: '3', title: 'Email Delivery', desc: 'Login credentials are automatically sent to the student\'s email address. No manual action required.' },
-                ].map((item) => (
-                  <Box key={item.step} sx={{ display: 'flex', gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 36, height: 36, borderRadius: '50%',
-                        backgroundColor: 'primary.main', color: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 700, fontSize: '0.875rem', flexShrink: 0,
-                      }}
-                    >
-                      {item.step}
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" fontWeight={600} gutterBottom>{item.title}</Typography>
-                      <Typography variant="body2" color="text.secondary">{item.desc}</Typography>
-                    </Box>
-                  </Box>
-                ))}
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <StudentProfileDrawer 
+        open={profileOpen} 
+        onClose={() => setProfileOpen(false)} 
+        student={currentStudent} 
+      />
     </Box>
   );
-};
-
-export default StudentRegistrationPage;
+}

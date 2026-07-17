@@ -54,11 +54,31 @@ const LiveMonitoringPage = () => {
         const res = await apiClient.get(`/monitoring/current?exam_session_id=${examId}`);
         if (res.data) {
           setRiskScore(res.data.current_risk_score || 0);
-          setViolations(res.data.active_violations?.map((v: any) => ({
-            type: v.violation_type,
-            time: new Date().toLocaleTimeString(),
-            severity: v.severity.toLowerCase()
-          })) || []);
+          
+          if (res.data.active_violations) {
+            setViolations(res.data.active_violations.map((v: any) => ({
+              type: v.violation_type,
+              time: new Date(v.timestamp).toLocaleTimeString(),
+              severity: v.severity.toLowerCase()
+            })));
+          }
+          
+          if (res.data.timeline_events && res.data.timeline_events.length > 0) {
+            const mappedTimeline = res.data.timeline_events.map((e: any) => {
+              let icon = 'ℹ️';
+              if (e.severity === 'CRITICAL' || e.severity === 'HIGH') icon = '🔴';
+              else if (e.event_type.includes('FACE')) icon = '👀';
+              else if (e.event_type.includes('OBJECT') || e.event_type.includes('PHONE')) icon = '📱';
+              
+              return {
+                icon,
+                text: e.description || e.event_type,
+                time: new Date(e.timestamp).toLocaleTimeString()
+              };
+            });
+            // append initial start
+            setTimeline([...mappedTimeline, { icon: '▶️', text: 'Exam session started', time: new Date().toLocaleTimeString() }]);
+          }
         }
       } catch (err: any) {
         console.error("Could not fetch initial status", getErrorMessage(err));

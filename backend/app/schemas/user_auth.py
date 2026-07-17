@@ -13,6 +13,8 @@ class UserResponse(BaseModel):
     email: EmailStr
     full_name: str
     is_active: bool
+    phone_number: Optional[str] = None
+    profile_picture_url: Optional[str] = None
     role: Optional[RoleResponse] = None
 
     class Config:

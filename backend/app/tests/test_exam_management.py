@@ -1,20 +1,27 @@
 import pytest
 import pytest_asyncio
 import os
+import io
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.testclient import TestClient
 from fastapi import UploadFile
+from starlette.datastructures import Headers
 
 from app.services.exam_service import ExamService
+from app.services.question_paper_service import QuestionPaperService
 from app.services.exceptions import ScheduleConflictError, InvalidExamStateError
 from app.schemas.exam import ExamCreate, ExamUpdate
 from app.repositories.user_repository import UserRepository
 from app.repositories.role_repository import RoleRepository
 
+from io import BytesIO
+
 class MockUploadFile(UploadFile):
-    def __init__(self, filename, content):
-        super().__init__(filename=filename)
+    def __init__(self, filename: str, content: bytes):
+        file = io.BytesIO(content)
+        headers = Headers({"content-type": "application/pdf"})
+        super().__init__(file=file, size=len(content), filename=filename, headers=headers)
         self._content = content
         
     async def read(self):
@@ -38,14 +45,23 @@ async def setup_users(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_question_paper_upload(db_session: AsyncSession, setup_users):
     examiner = setup_users
-    service = ExamService(db_session)
+    qp_service = QuestionPaperService(db_session)
     
     mock_file = MockUploadFile("test_paper.pdf", b"dummy pdf content")
     
-    paper = await service.upload_paper(
+    from app.schemas.user_auth import UserResponse
+    examiner_resp = UserResponse(
+        id=examiner.id,
+        email=examiner.email,
+        full_name=examiner.full_name,
+        is_active=examiner.is_active,
+        role=None
+    )
+    
+    paper = await qp_service.create_paper(
         title="CS101 Final",
         course_name="CS101",
-        uploader_id=examiner.id,
+        current_user=examiner_resp,
         file=mock_file
     )
     
@@ -54,17 +70,27 @@ async def test_question_paper_upload(db_session: AsyncSession, setup_users):
     assert paper.file_path.endswith(".pdf")
     
     # Cleanup physical file
-    await service.delete_paper(paper.id)
+    await qp_service.delete_paper(paper.id, examiner_resp)
     assert not os.path.exists(paper.file_path)
 
 @pytest.mark.asyncio
 async def test_exam_creation_and_conflict(db_session: AsyncSession, setup_users):
     examiner = setup_users
+    qp_service = QuestionPaperService(db_session)
     ex_service = ExamService(db_session)
+    
+    from app.schemas.user_auth import UserResponse
+    examiner_resp = UserResponse(
+        id=examiner.id,
+        email=examiner.email,
+        full_name=examiner.full_name,
+        is_active=examiner.is_active,
+        role=None
+    )
     
     # Upload dummy paper
     mock_file = MockUploadFile("midterm.pdf", b"dummy pdf content")
-    paper = await ex_service.upload_paper("CS101 Midterm", "CS101", examiner.id, mock_file)
+    paper = await qp_service.create_paper("CS101 Midterm", "CS101", mock_file, examiner_resp)
     
     now = datetime.now()
     start1 = now + timedelta(days=1)
@@ -97,15 +123,25 @@ async def test_exam_creation_and_conflict(db_session: AsyncSession, setup_users)
         ))
         
     # Cleanup
-    await ex_service.delete_paper(paper.id)
+    await qp_service.delete_paper(paper.id, examiner_resp)
 
 @pytest.mark.asyncio
 async def test_exam_state_transitions_and_ai_hooks(db_session: AsyncSession, setup_users):
     examiner = setup_users
+    qp_service = QuestionPaperService(db_session)
     ex_service = ExamService(db_session)
     
+    from app.schemas.user_auth import UserResponse
+    examiner_resp = UserResponse(
+        id=examiner.id,
+        email=examiner.email,
+        full_name=examiner.full_name,
+        is_active=examiner.is_active,
+        role=None
+    )
+    
     mock_file = MockUploadFile("final.pdf", b"pdf content")
-    paper = await ex_service.upload_paper("CS102 Final", "CS102", examiner.id, mock_file)
+    paper = await qp_service.create_paper("CS102 Final", "CS102", mock_file, examiner_resp)
     
     now = datetime.now()
     exam = await ex_service.create_exam(examiner.id, ExamCreate(
@@ -122,7 +158,7 @@ async def test_exam_state_transitions_and_ai_hooks(db_session: AsyncSession, set
     exam = await ex_service._change_status(exam.id, "READY")
     
     # Start Exam (Triggers AI Session Manager)
-    exam = await ex_service.start_exam(exam.id)
+    exam = await ex_service.start_exam(exam.id, student_id=1)
     assert exam.status == "RUNNING"
     assert exam.ai_session_status == "ACTIVE"
     
@@ -141,4 +177,4 @@ async def test_exam_state_transitions_and_ai_hooks(db_session: AsyncSession, set
     assert exam.ai_session_status == "INACTIVE"
     
     # Cleanup
-    await ex_service.delete_paper(paper.id)
+    await qp_service.delete_paper(paper.id, examiner_resp)

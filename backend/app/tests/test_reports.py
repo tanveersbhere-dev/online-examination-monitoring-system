@@ -18,8 +18,8 @@ from app.models.question_paper import QuestionPaper
 async def setup_report_data(db_session: AsyncSession):
     # Setup Roles & Users
     role_repo = RoleRepository(db_session)
-    examiner_role = await role_repo.create(name="EXAMINER")
-    student_role = await role_repo.create(name="STUDENT")
+    examiner_role = await role_repo.create(name="Examiner")
+    student_role = await role_repo.create(name="Student")
     
     user_repo = UserRepository(db_session)
     examiner = await user_repo.create(
@@ -38,7 +38,7 @@ async def setup_report_data(db_session: AsyncSession):
     )
     
     # Create Question Paper and Exam directly to bypass services
-    qp = QuestionPaper(title="Test Paper", course_name="CS101", file_path="dummy.pdf", uploader_id=examiner.id)
+    qp = QuestionPaper(title="Test Paper", course_name="CS101", file_path="dummy.pdf", uploaded_by=examiner.id)
     db_session.add(qp)
     await db_session.flush()
 
@@ -56,7 +56,7 @@ async def setup_report_data(db_session: AsyncSession):
     await db_session.flush()
 
     # Create AI Session & ExamSession (COMPLETED)
-    ai_session = AISession(exam_id=exam.id, status="INACTIVE")
+    ai_session = AISession(state="STOPPED")
     db_session.add(ai_session)
     await db_session.flush()
 

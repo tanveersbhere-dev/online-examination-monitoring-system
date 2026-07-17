@@ -171,8 +171,15 @@ class AISessionManager:
     @classmethod
     def start_session(cls, exam_session_id: int):
         if exam_session_id in cls._active_threads:
-            logger.info(f"Starting AI Session thread for ExamSession {exam_session_id}")
-            cls._active_threads[exam_session_id].start()
+            thread = cls._active_threads[exam_session_id]
+            if not thread.is_alive() and getattr(thread, '_started', False) and not thread._started.is_set():
+                logger.info(f"Starting AI Session thread for ExamSession {exam_session_id}")
+                thread.start()
+            elif not getattr(thread, '_started', False) or not thread._started.is_set():
+                logger.info(f"Starting AI Session thread for ExamSession {exam_session_id}")
+                thread.start()
+            else:
+                logger.info(f"AI Session thread for ExamSession {exam_session_id} is already running.")
         else:
             logger.error(f"Cannot start unknown AI Session {exam_session_id}")
             # If not initialized, fallback to creating it with unknown student

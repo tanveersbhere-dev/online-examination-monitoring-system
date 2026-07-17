@@ -20,8 +20,10 @@ class ExamSessionRepository(BaseRepository[ExamSession]):
 
     def _base_query(self):
         """Returns a base query with explicit eager loading to prevent MissingGreenlet exceptions."""
+        from app.models.exam_section_rule import ExamSectionRule
         return select(ExamSession).options(
             joinedload(ExamSession.exam).joinedload(Exam.question_paper),
+            joinedload(ExamSession.exam).selectinload(Exam.section_rules).selectinload(ExamSectionRule.question_rules),
             joinedload(ExamSession.student).joinedload(User.role),
             joinedload(ExamSession.ai_session)
         )

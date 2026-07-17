@@ -66,3 +66,52 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send email to {recipient_email}: {e}")
             raise EmailDeliveryError("SMTP dispatch failed.") from e
+
+    @staticmethod
+    async def send_otp_email(recipient_email: str, otp_code: str, purpose: str):
+        if settings.TESTING:
+            logger.info(f"TESTING mode: Skipping actual SMTP delivery for OTP. Code: {otp_code}, Purpose: {purpose}")
+            return
+
+        subject = "Your Verification Code"
+        if purpose == "PASSWORD_RESET":
+            subject = "Password Reset Verification Code"
+        elif purpose == "REGISTRATION":
+            subject = "Account Verification Code"
+        elif purpose == "EMAIL_CHANGE":
+            subject = "Email Change Verification Code"
+
+        html_body = f"""
+        <html>
+            <body>
+                <p>Hello,</p>
+                <p>Your verification code is: <strong>{otp_code}</strong></p>
+                <p>This code will expire in 10 minutes.</p>
+                <p>If you did not request this, please ignore this email.</p>
+                <br>
+                <p>Regards,<br>Online Examination System</p>
+            </body>
+        </html>
+        """
+
+        message = EmailMessage()
+        message["From"] = settings.SMTP_FROM
+        message["To"] = recipient_email
+        message["Subject"] = subject
+        message.set_content("Please enable HTML to view this message.")
+        message.add_alternative(html_body, subtype="html")
+
+        try:
+            await aiosmtplib.send(
+                message,
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
+                username=settings.SMTP_USERNAME,
+                password=settings.SMTP_PASSWORD,
+                start_tls=True
+            )
+            logger.info(f"OTP emailed to {recipient_email}")
+        except Exception as e:
+            logger.error(f"Failed to send OTP email to {recipient_email}: {e}")
+            raise EmailDeliveryError("SMTP dispatch failed.") from e
+

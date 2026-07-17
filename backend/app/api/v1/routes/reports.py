@@ -38,3 +38,13 @@ async def get_report(
         )
     logger.info(f"Report generated and viewed for ExamSession {exam_session_id} by Examiner {current_user.id}")
     return report
+
+@router.get("/student/{student_id}", response_model=None)
+async def get_student_analytics(
+    student_id: int,
+    current_user: UserResponse = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+):
+    """Return analytical data for a specific student across all completed exams."""
+    service = ReportService(db)
+    return await service.get_student_analytics(student_id)

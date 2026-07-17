@@ -71,22 +71,6 @@ class AIEventProcessor:
         except Exception as e:
             logger.error(f"Failed to broadcast telemetry event {event.event_type}: {e}")
 
-        # 2. Check if event maps to a actionable Violation
-        config = EVENT_CONFIG.get(event.event_type)
-        if not config:
-            # Not actionable, just telemetry
-            return
-            
-        category, mapped_severity, cooldown_secs, min_confidence = config
-        
-        # 3. Confidence Threshold Filter
-        if event.confidence < min_confidence:
-            return
-            
-        # 4. Duplicate Suppression (Rate Limiting)
-        if cls._is_suppressed(event.exam_session_id, event.event_type, cooldown_secs, event.timestamp):
-            return
-
         # 5. DB Persistence using standalone session
         try:
             async with async_session_factory() as db:
@@ -94,6 +78,37 @@ class AIEventProcessor:
                 exam_session = await exam_session_repo.get_by_id(event.exam_session_id)
                 if not exam_session:
                     logger.error(f"Cannot process event for missing exam_session {event.exam_session_id}")
+                    return
+
+                # Persist raw AI Event History
+                from app.models.ai_event import AIEvent
+                ai_event_record = AIEvent(
+                    exam_session_id=event.exam_session_id,
+                    event_type=event.event_type,
+                    severity=event.severity,
+                    confidence=event.confidence,
+                    source_module=event.source_module,
+                    payload=event.payload,
+                    timestamp=datetime.fromtimestamp(event.timestamp)
+                )
+                db.add(ai_event_record)
+                await db.commit()
+                await db.refresh(ai_event_record)
+
+                # Check if event maps to a actionable Violation
+                config = EVENT_CONFIG.get(event.event_type)
+                if not config:
+                    # Not actionable, just telemetry history
+                    return
+                    
+                category, mapped_severity, cooldown_secs, min_confidence = config
+                
+                # Confidence Threshold Filter for Violations
+                if event.confidence < min_confidence:
+                    return
+                    
+                # Duplicate Suppression (Rate Limiting) for Violations
+                if cls._is_suppressed(event.exam_session_id, event.event_type, cooldown_secs, event.timestamp):
                     return
 
                 # Create Violation
@@ -110,7 +125,6 @@ class AIEventProcessor:
                 violation = await violation_service.create_violation(violation_in)
                 
                 # Optionally, if a frame is provided in payload for evidence, generate Evidence
-                # Often the AI payload will contain `frame_path` or `evidence_path`
                 evidence_path = event.payload.get("frame_path") or event.payload.get("evidence_path")
                 if evidence_path:
                     evidence_service = EvidenceService(db)

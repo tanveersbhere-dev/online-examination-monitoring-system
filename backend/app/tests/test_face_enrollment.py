@@ -67,10 +67,9 @@ def test_processor_embedding_injection():
     # Simulate face reappearance / tracking loss bypass
     context = ExamContext()
     context.face_info = FaceInfo(
-        face_present=True,
+        face_detected=True,
         face_count=1,
-        confidence=0.9,
-        tracking_id="TRACK_123"
+        confidence=0.9
     )
     
     # Normally we mock the extraction since insightface is heavy.

@@ -204,3 +204,61 @@ class ReportService:
             statistics=stats,
             recommendation=recommendation
         )
+
+    async def get_student_analytics(self, student_id: int) -> StudentAnalyticsResponse:
+        from app.schemas.report import StudentAnalyticsResponse, StudentExamHistoryItem
+
+        query = (
+            select(ExamSession)
+            .options(
+                selectinload(ExamSession.exam),
+                selectinload(ExamSession.violations)
+            )
+            .filter(ExamSession.student_id == student_id, ExamSession.status == "COMPLETED")
+        )
+        result = await self.db.execute(query)
+        sessions = result.scalars().all()
+
+        total_exams = len(sessions)
+        total_violations_all = 0
+        sum_risk_scores = 0.0
+
+        history = []
+
+        for session in sessions:
+            duration = None
+            if session.start_time and session.end_time:
+                duration = (session.end_time - session.start_time).total_seconds() / 60.0
+
+            highest_risk = 0.0
+            violations_count = len(session.violations)
+            
+            if violations_count > 0:
+                highest_risk = max(v.risk_score for v in session.violations)
+                
+            total_violations_all += violations_count
+            sum_risk_scores += highest_risk
+
+            history.append(
+                StudentExamHistoryItem(
+                    exam_session_id=session.id,
+                    exam_name=session.exam.title,
+                    date=session.start_time,
+                    duration_minutes=duration,
+                    highest_risk_score=highest_risk,
+                    total_violations=violations_count
+                )
+            )
+
+        average_risk = (sum_risk_scores / total_exams) if total_exams > 0 else 0.0
+
+        # Sort history chronologically descending
+        history.sort(key=lambda x: x.date if x.date else datetime.min, reverse=True)
+
+        return StudentAnalyticsResponse(
+            student_id=student_id,
+            total_exams_taken=total_exams,
+            average_risk_score=average_risk,
+            total_violations_across_exams=total_violations_all,
+            exam_history=history
+        )

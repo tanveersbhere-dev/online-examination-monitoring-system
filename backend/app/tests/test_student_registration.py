@@ -3,6 +3,7 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from main import app
 from app.repositories.user_repository import UserRepository
@@ -18,7 +19,7 @@ from app.services.exceptions import CredentialGenerationError
 async def setup_registration_data(db_session: AsyncSession):
     # Setup Roles & Examiner
     role_repo = RoleRepository(db_session)
-    examiner_role = await role_repo.create(name="EXAMINER")
+    examiner_role = await role_repo.create(name="Examiner")
     student_role = await role_repo.create(name="STUDENT")
     
     user_repo = UserRepository(db_session)
@@ -31,7 +32,7 @@ async def setup_registration_data(db_session: AsyncSession):
     )
     
     # Create Question Paper and Exam
-    qp = QuestionPaper(title="Test Paper", course_name="CS101", file_path="dummy.pdf", uploader_id=examiner.id)
+    qp = QuestionPaper(title="Test Paper", course_name="CS101", file_path="dummy.pdf", uploaded_by=examiner.id)
     db_session.add(qp)
     await db_session.flush()
 
@@ -79,11 +80,20 @@ async def test_student_registration_workflow(client: TestClient, setup_registrat
         "full_name": "Jane Doe",
         "father_name": "John Doe Sr",
         "email": "jane@student.com",
-        "exam_id": exam.id,
+        "exam_id": str(exam.id),
         "credential_expiry_date": (datetime.utcnow() + timedelta(days=7)).isoformat()
     }
     
-    resp = client.post("/api/v1/students/register", json=req_payload, headers={"Authorization": f"Bearer {token}"})
+    valid_jpeg = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x14\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xc4\x00\x14\x10\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x7f\xff\xd9'
+    files = {
+        "face_image": ("dummy.jpg", valid_jpeg, "image/jpeg")
+    }
+    
+    with patch("app.services.student_service.EmbeddingIdentityProcessor._extract_embedding", return_value=[0.1] * 512):
+        resp = client.post("/api/v1/students/register", data=req_payload, files=files, headers={"Authorization": f"Bearer {token}"})
+        
+    if resp.status_code != 201:
+        print(resp.text)
     assert resp.status_code == 201
     
     data = resp.json()
@@ -96,7 +106,8 @@ async def test_student_registration_workflow(client: TestClient, setup_registrat
     student_id = data["id"]
     
     # Attempt Duplicate Email
-    resp_dup = client.post("/api/v1/students/register", json=req_payload, headers={"Authorization": f"Bearer {token}"})
+    with patch("ai_engine.features.face_identity.embedding_processor.EmbeddingIdentityProcessor._extract_embedding", return_value=[0.1] * 512):
+        resp_dup = client.post("/api/v1/students/register", data=req_payload, files=files, headers={"Authorization": f"Bearer {token}"})
     assert resp_dup.status_code == 409
     
     # List Students

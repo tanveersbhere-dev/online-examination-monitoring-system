@@ -177,6 +177,8 @@ class StudentService:
                 user.is_active = True
                 
         await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(user)
         return StudentResponse.model_validate(user)
 
     async def deactivate_student(self, student_id: int):

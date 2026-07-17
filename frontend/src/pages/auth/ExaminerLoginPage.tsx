@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import apiClient from '../../services/apiClient';
 import { getErrorMessage } from '../../utils/errorHandler';
@@ -15,7 +15,8 @@ import {
   Divider,
   Stack,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Link
 } from '@mui/material';
 import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
@@ -184,10 +185,15 @@ const ExaminerLoginPage = () => {
                 ),
               }}
             />
-            <FormControlLabel
-              control={<Checkbox disabled={isLoading} />}
-              label={<Typography variant="body2">Remember me</Typography>}
-            />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <FormControlLabel
+                control={<Checkbox disabled={isLoading} />}
+                label={<Typography variant="body2">Remember me</Typography>}
+              />
+              <Link component={RouterLink} to="/examiner/forgot-password" variant="body2" sx={{ fontWeight: 500, textDecoration: 'none' }}>
+                Forgot password?
+              </Link>
+            </Box>
             <Button
               variant="contained"
               size="large"
@@ -199,6 +205,14 @@ const ExaminerLoginPage = () => {
             >
               {isLoading ? 'Authenticating...' : 'Login to Dashboard'}
             </Button>
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Don't have an account?{' '}
+                <Link component={RouterLink} to="/examiner/register" sx={{ fontWeight: 600, textDecoration: 'none' }}>
+                  Create one now
+                </Link>
+              </Typography>
+            </Box>
           </Stack>
         </Box>
       </Box>

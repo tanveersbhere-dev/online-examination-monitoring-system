@@ -73,3 +73,18 @@ class MonitoringReportResponse(BaseModel):
     evidence_gallery: List[EvidenceGalleryItem]
     statistics: ReportStatistics
     recommendation: str
+
+class StudentExamHistoryItem(BaseModel):
+    exam_session_id: int
+    exam_name: str
+    date: Optional[datetime]
+    duration_minutes: Optional[float]
+    highest_risk_score: float
+    total_violations: int
+
+class StudentAnalyticsResponse(BaseModel):
+    student_id: int
+    total_exams_taken: int
+    average_risk_score: float
+    total_violations_across_exams: int
+    exam_history: List[StudentExamHistoryItem]

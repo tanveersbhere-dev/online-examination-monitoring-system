@@ -76,9 +76,9 @@ class TestExamContext(unittest.TestCase):
         self.assertIsInstance(context.metadata, Metadata)
 
         # Set and get
-        obj_info = ObjectInfo(items=[])
+        obj_info = ObjectInfo(current_detections=[])
         context.object_info = obj_info
-        self.assertEqual(len(context.object_info.items), 0)
+        self.assertEqual(len(context.object_info.current_detections), 0)
 
         # Metadata dictionary compatibility setter
         context.metadata = {"session_hash": "abc"}

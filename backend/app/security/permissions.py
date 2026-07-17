@@ -20,5 +20,6 @@ class RoleChecker:
 
 # Convenience Dependencies
 RequireAuthenticated = Depends(get_current_user)
+RequireAdmin = Depends(RoleChecker(["Admin"]))
 RequireExaminer = Depends(RoleChecker(["Admin", "Examiner"]))
 RequireStudent = Depends(RoleChecker(["Student"]))

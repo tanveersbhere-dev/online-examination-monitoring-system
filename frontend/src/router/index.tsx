@@ -18,13 +18,26 @@ import IdentityVerificationPage from '../pages/student/IdentityVerificationPage'
 import OnlineExamPage from '../pages/student/OnlineExamPage';
 import SubmissionPage from '../pages/student/SubmissionPage';
 import ExaminerLoginPage from '../pages/auth/ExaminerLoginPage';
+import ExaminerRegisterPage from '../pages/auth/ExaminerRegisterPage';
+import OTPVerificationPage from '../pages/auth/OTPVerificationPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
 import DashboardPage from '../pages/examiner/DashboardPage';
 import StudentRegistrationPage from '../pages/examiner/StudentRegistrationPage';
 import QuestionPapersPage from '../pages/examiner/QuestionPapersPage';
-import ExamManagementPage from '../pages/examiner/ExamManagementPage';
+import ExamsPage from '../pages/examiner/ExamsPage';
+import ExamBuilderPage from '../pages/examiner/ExamBuilderPage';
 import LiveMonitoringPage from '../pages/examiner/LiveMonitoringPage';
 import MonitoringReportsPage from '../pages/examiner/MonitoringReportsPage';
 import StatisticsPage from '../pages/examiner/StatisticsPage';
+import ProfilePage from '../pages/examiner/ProfilePage';
+import SupervisorsPage from '../pages/examiner/SupervisorsPage';
+import SettingsPage from '../pages/examiner/SettingsPage';
+
+// Admin Pages
+import SystemDashboardPage from '../pages/admin/SystemDashboardPage';
+import SystemLogsPage from '../pages/admin/SystemLogsPage';
+import PlatformSettingsPage from '../pages/admin/PlatformSettingsPage';
 
 const router = createBrowserRouter([
   // Public — Landing
@@ -62,10 +75,26 @@ const router = createBrowserRouter([
     ]
   },
 
-  // Examiner Login — standalone (no drawer)
+  // Examiner Auth — standalone
   {
     path: '/examiner/login',
     element: <ExaminerLoginPage />,
+  },
+  {
+    path: '/examiner/register',
+    element: <ExaminerRegisterPage />,
+  },
+  {
+    path: '/examiner/verify-otp',
+    element: <OTPVerificationPage />,
+  },
+  {
+    path: '/examiner/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: '/examiner/reset-password',
+    element: <ResetPasswordPage />,
   },
 
   // Examiner Dashboard Shell - Protected
@@ -80,13 +109,34 @@ const router = createBrowserRouter([
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'students', element: <StudentRegistrationPage /> },
           { path: 'question-papers', element: <QuestionPapersPage /> },
-          { path: 'exams', element: <ExamManagementPage /> },
+          { path: 'exams', element: <ExamsPage /> },
+          { path: 'exams/build', element: <ExamBuilderPage /> },
           { path: 'monitoring', element: <LiveMonitoringPage /> },
           { path: 'reports', element: <MonitoringReportsPage /> },
           { path: 'statistics', element: <StatisticsPage /> },
+          { path: 'profile', element: <ProfilePage /> },
+          { path: 'supervisors', element: <SupervisorsPage /> },
+          { path: 'settings', element: <SettingsPage /> },
         ]
       }
     ],
+  },
+
+  // Admin Shell - Reuses ExaminerLayout
+  {
+    path: '/admin',
+    element: <ExaminerLayout />,
+    children: [
+      {
+        element: <ProtectedRoute allowedRoles={['Admin']} redirectPath="/examiner/login" />,
+        children: [
+          { index: true, element: <Navigate to="/admin/system-dashboard" replace /> },
+          { path: 'system-dashboard', element: <SystemDashboardPage /> },
+          { path: 'system-logs', element: <SystemLogsPage /> },
+          { path: 'platform-settings', element: <PlatformSettingsPage /> },
+        ]
+      }
+    ]
   },
 
   // 404 catch-all

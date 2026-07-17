@@ -62,12 +62,12 @@ const OnlineExamPage = () => {
     // 1. Fetch questions and start session
     const initializeExam = async () => {
       try {
-        // Fetch questions
-        const qRes = await apiClient.get(`/exams/${examId}/questions`);
-        setQuestions(qRes.data.questions);
+        // Start Exam / AI Session via new runtime API
+        const res = await apiClient.post(`/runtime/start?exam_id=${examId}`);
+        const data = res.data;
         
-        // Start Exam / AI Session
-        await apiClient.patch(`/exams/${examId}/start`);
+        setQuestions(data.questions || []);
+        setTimeLeft(data.time_left_seconds || 7200);
         
         // Connect WebSocket for live monitoring
         const ws = new WebSocketClient(parseInt(examId));
@@ -106,8 +106,18 @@ const OnlineExamPage = () => {
       });
     }, 1000);
 
+    // Heartbeat interval
+    const heartbeat = setInterval(async () => {
+      try {
+        await apiClient.post(`/runtime/heartbeat?exam_id=${examId}`);
+      } catch (e) {
+        console.error("Heartbeat failed", e);
+      }
+    }, 60000); // every 60 seconds
+
     return () => {
       clearInterval(timer);
+      clearInterval(heartbeat);
       if (wsRef.current) wsRef.current.disconnect();
       if (videoRef.current && videoRef.current.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
@@ -160,7 +170,7 @@ const OnlineExamPage = () => {
 
   const handleSubmit = async () => {
     try {
-      await apiClient.patch(`/exams/${examId}/complete`);
+      await apiClient.post(`/runtime/submit?exam_id=${examId}`);
       setSubmitOpen(false);
       navigate('/student/submitted');
     } catch (err) {

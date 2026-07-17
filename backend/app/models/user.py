@@ -10,6 +10,11 @@ if TYPE_CHECKING:
     from .exam import Exam
     from .question_paper import QuestionPaper
     from .exam_session import ExamSession
+    from .otp import OTP
+    from .activity import Activity
+    from .notification import Notification
+    from .workspace_preference import WorkspacePreference
+    from .student import Student
 
 class User(BaseEntity):
     __tablename__ = "users"
@@ -26,6 +31,10 @@ class User(BaseEntity):
     credential_expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     account_status: Mapped[str] = mapped_column(String(50), default="ACTIVE", nullable=False)
     
+    # Module 1 fields
+    phone_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    profile_picture_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    
     # Face Enrollment fields
     face_image_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     face_embedding: Mapped[Optional[str]] = mapped_column(String, nullable=True) # JSON serialized
@@ -37,3 +46,8 @@ class User(BaseEntity):
     exams_created: Mapped[List["Exam"]] = relationship("Exam", back_populates="creator", cascade="all, delete-orphan")
     papers_uploaded: Mapped[List["QuestionPaper"]] = relationship("QuestionPaper", back_populates="uploader", cascade="all, delete-orphan")
     exam_sessions: Mapped[List["ExamSession"]] = relationship("ExamSession", back_populates="student", cascade="all, delete-orphan")
+    otps: Mapped[List["OTP"]] = relationship("OTP", back_populates="user", cascade="all, delete-orphan")
+    activities: Mapped[List["Activity"]] = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
+    notifications: Mapped[List["Notification"]] = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    workspace_preference: Mapped[Optional["WorkspacePreference"]] = relationship("WorkspacePreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    repository_students: Mapped[List["Student"]] = relationship("Student", back_populates="examiner", cascade="all, delete-orphan")

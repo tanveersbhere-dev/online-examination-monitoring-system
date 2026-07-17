@@ -61,7 +61,7 @@ async def test_login_invalid_password(client: TestClient, setup_test_users):
     assert response.status_code == 401
 
 @pytest.mark.asyncio
-async def test_login_unknown_user(client: TestClient):
+async def test_login_unknown_user(client: TestClient, db_session):
     response = client.post("/api/v1/auth/login", json={
         "email": "ghost@test.com",
         "password": "password123"

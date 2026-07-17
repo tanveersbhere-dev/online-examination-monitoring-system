@@ -70,6 +70,33 @@ const StatisticsPage = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    if (reports.length === 0) return;
+    
+    const headers = ["Session ID", "Student Name", "Exam Name", "Date", "Duration (mins)", "Final Risk Score", "Total Violations"];
+    const rows = reports.map((r: any) => [
+      r.exam_session_id,
+      `"${r.student_name}"`,
+      `"${r.exam_name}"`,
+      r.date ? new Date(r.date).toLocaleString() : 'N/A',
+      r.duration_minutes ? r.duration_minutes.toFixed(1) : 0,
+      r.final_risk_score ? r.final_risk_score.toFixed(1) : 0,
+      r.total_violations || 0
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "exam_statistics_report.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading && !reportDetail && reports.length === 0) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
   }
@@ -120,7 +147,7 @@ const StatisticsPage = () => {
               ))}
             </Select>
           </FormControl>
-          <Button variant="outlined" size="medium" startIcon={<DownloadIcon />}>Export</Button>
+          <Button variant="outlined" size="medium" startIcon={<DownloadIcon />} onClick={handleExportCSV}>Export CSV</Button>
         </Box>
       </Box>
 

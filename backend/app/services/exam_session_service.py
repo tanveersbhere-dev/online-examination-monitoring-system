@@ -112,3 +112,82 @@ class ExamSessionService:
             raise ValueError("Cannot delete an active exam session.")
             
         await self.session_repo.delete(session_id)
+
+    # --- CANDIDATE RUNTIME METHODS ---
+    
+    async def start_runtime_session(self, exam_id: int, user_id: int) -> dict:
+        from app.models.exam import Exam
+        from sqlalchemy import select
+        
+        # Verify Exam
+        exam = await self.exam_repo.get_by_id(exam_id)
+        if not exam:
+            raise EntityNotFoundError("Exam not found.")
+            
+        if exam.status not in ["READY", "RUNNING"]:
+            raise ValueError(f"Exam is not ready to be taken. Status: {exam.status}")
+
+        # Check existing session (Recovery)
+        existing = await self.session_repo.get_by_student_and_exam(user_id, exam_id)
+        
+        current_time = datetime.now(timezone.utc)
+        
+        if existing:
+            if existing.status == "COMPLETED":
+                raise ValueError("You have already completed this exam.")
+                
+            # Session Recovery
+            if existing.status == "PENDING":
+                existing.status = "RUNNING"
+                existing.start_time = current_time
+                await self.db.commit()
+            
+            start_time = existing.start_time
+            if start_time and start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
+                
+            elapsed = (current_time - start_time).total_seconds() if start_time else 0
+            time_left = max(0, int((exam.duration_minutes * 60) - elapsed))
+            
+            return {
+                "session": ExamSessionResponse.model_validate(existing),
+                "time_left_seconds": time_left,
+                "exam_config": {
+                    "duration_minutes": exam.duration_minutes,
+                    "title": exam.title
+                }
+            }
+            
+        # New Session Creation
+        new_session = await self.session_repo.create(
+            exam_id=exam_id,
+            student_id=user_id,
+            status="RUNNING"
+        )
+        new_session.start_time = current_time
+        await self.db.commit()
+        new_session = await self.session_repo.get_by_id(new_session.id)
+        
+        return {
+            "session": ExamSessionResponse.model_validate(new_session),
+            "time_left_seconds": exam.duration_minutes * 60,
+            "exam_config": {
+                "duration_minutes": exam.duration_minutes,
+                "title": exam.title
+            }
+        }
+
+    async def submit_runtime_session(self, exam_id: int, user_id: int) -> ExamSessionResponse:
+        existing = await self.session_repo.get_by_student_and_exam(user_id, exam_id)
+        if not existing:
+            raise EntityNotFoundError("Session not found.")
+            
+        if existing.status == "COMPLETED":
+            return ExamSessionResponse.model_validate(existing)
+            
+        existing.status = "COMPLETED"
+        existing.end_time = datetime.now(timezone.utc)
+        await self.db.commit()
+        existing = await self.session_repo.get_by_id(existing.id)
+        
+        return ExamSessionResponse.model_validate(existing)

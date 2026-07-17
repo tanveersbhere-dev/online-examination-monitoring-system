@@ -21,13 +21,14 @@ RequireManager = Depends(RoleChecker(["Admin", "Examiner"]))
 async def upload_question_paper(
     title: str = Form(...),
     course_name: str = Form(...),
+    description: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = RequireManager
 ):
     service = QuestionPaperService(db)
     try:
-        paper = await service.create_paper(title, course_name, file, current_user)
+        paper = await service.create_paper(title, course_name, file, current_user, description)
         return paper
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -58,6 +59,7 @@ async def get_question_paper(
 @router.get("/{paper_id}/download")
 async def download_question_paper(
     paper_id: int,
+    preview: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user)
 ):
@@ -66,7 +68,16 @@ async def download_question_paper(
         paper = await service.get_paper(paper_id)
         if not os.path.exists(paper.file_path):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File physically missing on server.")
-        return FileResponse(path=paper.file_path, filename=os.path.basename(paper.file_path))
+        
+        # Inline disposition for previewing PDFs natively in browser
+        disposition = "inline" if preview and "pdf" in paper.mime_type else "attachment"
+        headers = {"Content-Disposition": f"{disposition}; filename=\"{os.path.basename(paper.file_path)}\""}
+        return FileResponse(
+            path=paper.file_path, 
+            filename=os.path.basename(paper.file_path),
+            media_type=paper.mime_type,
+            headers=headers
+        )
     except QuestionPaperNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -84,6 +95,23 @@ async def update_question_paper(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorizationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+@router.put("/{paper_id}/file", response_model=QuestionPaperResponse)
+async def update_question_paper_file(
+    paper_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = RequireManager
+):
+    service = QuestionPaperService(db)
+    try:
+        return await service.update_paper_file(paper_id, file, current_user)
+    except QuestionPaperNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.delete("/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_question_paper(

@@ -103,3 +103,96 @@ async def submit_runtime_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+from app.schemas.runtime_state import RuntimeStateResponse
+
+@router.get("/state", response_model=RuntimeStateResponse)
+async def get_runtime_state(
+    exam_id: int,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current runtime state for the active session"""
+    try:
+        service = ExamSessionService(db)
+        session = await service.session_repo.get_by_student_and_exam(current_user.id, exam_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            
+        from app.services.runtime_state_service import RuntimeStateService
+        state_service = RuntimeStateService(db)
+        return await state_service.get_state(session.id)
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.put("/state/position", response_model=RuntimeStateResponse)
+async def update_runtime_position(
+    exam_id: int,
+    section_index: int,
+    question_index: int,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update current execution position in the runtime state"""
+    try:
+        service = ExamSessionService(db)
+        session = await service.session_repo.get_by_student_and_exam(current_user.id, exam_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            
+        from app.services.runtime_state_service import RuntimeStateService
+        state_service = RuntimeStateService(db)
+        return await state_service.update_position(session.id, section_index, question_index)
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+from app.schemas.candidate_answer import CandidateAnswerResponse, CandidateAnswerUpdate
+from typing import List
+
+@router.get("/answers", response_model=List[CandidateAnswerResponse])
+async def get_candidate_answers(
+    exam_id: int,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all saved answers for the active exam session."""
+    try:
+        service = ExamSessionService(db)
+        session = await service.session_repo.get_by_student_and_exam(current_user.id, exam_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            
+        from app.services.candidate_answer_service import CandidateAnswerService
+        ans_service = CandidateAnswerService(db)
+        return await ans_service.get_session_answers(session.id)
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.post("/answers/{section_index}/{question_index}", response_model=CandidateAnswerResponse)
+async def save_candidate_answer(
+    exam_id: int,
+    section_index: int,
+    question_index: int,
+    answer_in: CandidateAnswerUpdate,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Save or update a candidate's answer for a specific question."""
+    try:
+        service = ExamSessionService(db)
+        session = await service.session_repo.get_by_student_and_exam(current_user.id, exam_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            
+        if session.status != "RUNNING":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exam session is not active.")
+            
+        from app.services.candidate_answer_service import CandidateAnswerService
+        ans_service = CandidateAnswerService(db)
+        return await ans_service.save_answer(session.id, section_index, question_index, answer_in)
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

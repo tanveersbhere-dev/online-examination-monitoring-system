@@ -141,6 +141,12 @@ class ExamSessionService:
                 existing.status = "RUNNING"
                 existing.start_time = current_time
                 await self.db.commit()
+                
+            from app.services.runtime_state_service import RuntimeStateService
+            runtime_service = RuntimeStateService(self.db)
+            await runtime_service.initialize_state(existing.id)
+            # Re-fetch to get eager loaded relations if necessary
+            existing = await self.session_repo.get_by_id(existing.id)
             
             start_time = existing.start_time
             if start_time and start_time.tzinfo is None:
@@ -166,6 +172,11 @@ class ExamSessionService:
         )
         new_session.start_time = current_time
         await self.db.commit()
+        
+        from app.services.runtime_state_service import RuntimeStateService
+        runtime_service = RuntimeStateService(self.db)
+        await runtime_service.initialize_state(new_session.id)
+        
         new_session = await self.session_repo.get_by_id(new_session.id)
         
         return {

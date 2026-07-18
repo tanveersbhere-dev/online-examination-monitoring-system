@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.schemas.exam import ExamResponse
 from app.schemas.user_auth import UserResponse
+from app.schemas.runtime_state import RuntimeStateResponse
 
 class ExamSessionCreate(BaseModel):
     exam_id: int
@@ -25,6 +26,7 @@ class ExamSessionResponse(BaseModel):
     
     exam: Optional[ExamResponse] = None
     student: Optional[UserResponse] = None
+    runtime_state: Optional[RuntimeStateResponse] = None
     
     created_at: datetime
     updated_at: datetime

@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from .ai_session import AISession
     from .violation import Violation
     from .ai_event import AIEvent
+    from .runtime_state import RuntimeState
+    from .candidate_answer import CandidateAnswer
 
 class ExamSession(BaseEntity):
     __tablename__ = "exam_sessions"
@@ -28,3 +30,5 @@ class ExamSession(BaseEntity):
     ai_session: Mapped[Optional["AISession"]] = relationship("AISession", back_populates="exam_session", single_parent=True, cascade="all, delete-orphan")
     violations: Mapped[List["Violation"]] = relationship("Violation", back_populates="exam_session", cascade="all, delete-orphan")
     ai_events: Mapped[List["AIEvent"]] = relationship("AIEvent", back_populates="exam_session", cascade="all, delete-orphan")
+    runtime_state: Mapped[Optional["RuntimeState"]] = relationship("RuntimeState", back_populates="exam_session", uselist=False, cascade="all, delete-orphan")
+    candidate_answers: Mapped[List["CandidateAnswer"]] = relationship("CandidateAnswer", back_populates="exam_session", cascade="all, delete-orphan")

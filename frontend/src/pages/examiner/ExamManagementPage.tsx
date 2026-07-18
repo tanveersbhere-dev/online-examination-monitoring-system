@@ -101,10 +101,9 @@ const ExamManagementPage = () => {
     }
   };
 
-  // --- Create Modal Logic ---
   const handleOpenCreate = async () => {
     try {
-      const res = await apiClient.get('/exams/question-papers');
+      const res = await apiClient.get('/question-papers');
       setPapers(res.data);
       setOpenCreate(true);
       setError(null);

@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional, Any
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,7 +25,8 @@ class ExamSessionRepository(BaseRepository[ExamSession]):
             joinedload(ExamSession.exam).joinedload(Exam.question_paper),
             joinedload(ExamSession.exam).selectinload(Exam.section_rules).selectinload(ExamSectionRule.question_rules),
             joinedload(ExamSession.student).joinedload(User.role),
-            joinedload(ExamSession.ai_session)
+            joinedload(ExamSession.ai_session),
+            selectinload(ExamSession.runtime_state)
         )
 
     async def get_by_id(self, id: int) -> Optional[ExamSession]:

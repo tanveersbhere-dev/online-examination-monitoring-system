@@ -138,10 +138,10 @@ class ExamService:
             responses.append(resp)
         return responses
 
-    async def update_exam(self, exam_id: int, exam_in: OldExamUpdate) -> OldExamResponse:
+    async def update_exam(self, exam_id: int, user_id: int, exam_in: OldExamUpdate) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam:
-            raise ExamNotFoundError(f"Exam {exam_id} not found.")
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
             
         if exam.status not in ["DRAFT", "SCHEDULED"]:
             raise InvalidExamStateError("Cannot update exam configurations once it is ready or running.")
@@ -164,10 +164,10 @@ class ExamService:
         logger.info(f"Exam updated: ID {exam_id}")
         return OldExamResponse.model_validate(updated_exam)
 
-    async def delete_exam(self, exam_id: int) -> None:
+    async def delete_exam(self, exam_id: int, user_id: int) -> None:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam:
-            raise ExamNotFoundError(f"Exam {exam_id} not found.")
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
             
         if exam.status in ["READY", "RUNNING", "PAUSED"]:
             raise InvalidExamStateError("Cannot delete an exam that is currently active or ready. Cancel it first.")
@@ -379,25 +379,27 @@ class ExamService:
         resp.ai_session_status = "ACTIVE" if updated_exam.status in ["RUNNING", "PAUSED"] else "INACTIVE"
         return resp
 
-    async def start_exam(self, exam_id: int, student_id: int) -> OldExamResponse:
+    async def start_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam:
-            raise ExamNotFoundError(f"Exam {exam_id} not found.")
-        if exam.status not in ["DRAFT", "SCHEDULED", "READY"]:
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
+        if exam.status not in ["SCHEDULED", "READY"]:
             raise InvalidExamStateError(f"Cannot start exam from state {exam.status}.")
 
         try:
             # AI Orchestration
-            AISessionManager.initialize_session(exam.id, student_id)
+            AISessionManager.initialize_session(exam.id, user_id)
             AISessionManager.start_session(exam.id)
             return await self._change_status(exam.id, "RUNNING")
         except Exception as e:
             logger.error(f"Failed to start AI Session for exam {exam_id}: {e}")
             raise AISessionError("Failed to start AI Session.") from e
 
-    async def pause_exam(self, exam_id: int) -> OldExamResponse:
+    async def pause_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.status != "RUNNING":
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
+        if exam.status != "RUNNING":
             raise InvalidExamStateError("Only RUNNING exams can be paused.")
             
         try:
@@ -407,9 +409,11 @@ class ExamService:
             logger.error(f"Failed to pause AI Session for exam {exam_id}: {e}")
             raise AISessionError("Failed to pause AI Session.") from e
 
-    async def resume_exam(self, exam_id: int) -> OldExamResponse:
+    async def resume_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.status != "PAUSED":
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
+        if exam.status != "PAUSED":
             raise InvalidExamStateError("Only PAUSED exams can be resumed.")
             
         try:
@@ -419,9 +423,11 @@ class ExamService:
             logger.error(f"Failed to resume AI Session for exam {exam_id}: {e}")
             raise AISessionError("Failed to resume AI Session.") from e
 
-    async def complete_exam(self, exam_id: int) -> OldExamResponse:
+    async def complete_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
-        if not exam or exam.status not in ["RUNNING", "PAUSED"]:
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
+        if exam.status not in ["RUNNING", "PAUSED"]:
             raise InvalidExamStateError("Only RUNNING or PAUSED exams can be completed.")
             
         try:

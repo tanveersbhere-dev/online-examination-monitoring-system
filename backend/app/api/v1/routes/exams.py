@@ -81,7 +81,7 @@ async def update_exam(
     """Update exam configuration. Requires EXAMINER role."""
     try:
         service = ExamService(db)
-        return await service.update_exam(exam_id, exam_in)
+        return await service.update_exam(exam_id, current_user.id, exam_in)
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidExamStateError as e:
@@ -116,7 +116,7 @@ async def delete_exam(
     """Delete an exam. Requires EXAMINER role."""
     try:
         service = ExamService(db)
-        await service.delete_exam(exam_id)
+        await service.delete_exam(exam_id, current_user.id)
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidExamStateError as e:
@@ -132,7 +132,7 @@ async def assign_students(
     """Assign existing students to an exam. Requires EXAMINER role."""
     try:
         service = ExamService(db)
-        added_count = await service.assign_students(exam_id, request.student_ids)
+        added_count = await service.assign_repository_students(exam_id, request.student_ids, current_user.id)
         return {"detail": f"Successfully assigned {added_count} students to the exam."}
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -142,10 +142,10 @@ async def assign_students(
 @router.patch("/{exam_id}/start", response_model=ExamResponse)
 async def start_exam(
     exam_id: int,
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = RequireExaminer,
     db: AsyncSession = Depends(get_db)
 ):
-    """Start an exam and initialize AI Session (can be called by Student to start their session)."""
+    """Start an exam and initialize AI Session."""
     try:
         service = ExamService(db)
         return await service.start_exam(exam_id, current_user.id)
@@ -165,7 +165,7 @@ async def pause_exam(
     """Pause an active exam and its AI Session."""
     try:
         service = ExamService(db)
-        return await service.pause_exam(exam_id)
+        return await service.pause_exam(exam_id, current_user.id)
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidExamStateError as e:
@@ -182,7 +182,7 @@ async def resume_exam(
     """Resume a paused exam and its AI Session."""
     try:
         service = ExamService(db)
-        return await service.resume_exam(exam_id)
+        return await service.resume_exam(exam_id, current_user.id)
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidExamStateError as e:
@@ -193,13 +193,13 @@ async def resume_exam(
 @router.patch("/{exam_id}/complete", response_model=ExamResponse)
 async def complete_exam(
     exam_id: int,
-    current_user: UserResponse = Depends(get_current_user),
+    current_user: UserResponse = RequireExaminer,
     db: AsyncSession = Depends(get_db)
 ):
     """Complete an exam and gracefully shutdown the AI Session."""
     try:
         service = ExamService(db)
-        return await service.complete_exam(exam_id)
+        return await service.complete_exam(exam_id, current_user.id)
     except ExamNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except InvalidExamStateError as e:

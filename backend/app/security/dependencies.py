@@ -18,6 +18,10 @@ async def get_current_user(
     """FastAPI Dependency that extracts and validates the JWT, returning the current user."""
     try:
         payload = TokenService.validate_token(token)
+        
+        if payload.get("type") == "refresh":
+            raise TokenValidationError("Refresh tokens cannot be used as access tokens")
+
         user_id_str = payload.get("sub")
         if not user_id_str:
             raise HTTPException(

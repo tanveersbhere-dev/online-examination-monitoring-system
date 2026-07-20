@@ -42,10 +42,10 @@ async def ingest_cv_event(
     role_name = current_user.role.name.upper()
 
     # RBAC: Session Ownership Validation
-    if role_name == "STUDENT" and exam_session.student_id != current_user.id:
+    if role_name == "STUDENT":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to post events for this session"
+            detail="Students are not permitted to submit manual AI events."
         )
     elif role_name == "EXAMINER" and exam_session.exam.created_by != current_user.id:
         raise HTTPException(

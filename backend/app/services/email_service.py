@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.services.exceptions import EmailDeliveryError
+from app.utils.timezone import to_presentation_tz
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,8 @@ class EmailService:
 
         subject = "Online Examination Credentials"
         
-        expiry_str = expiry_date.strftime('%Y-%m-%d %H:%M:%S UTC') if expiry_date else "Never"
-        exam_date_str = exam_date.strftime('%Y-%m-%d %H:%M:%S UTC')
+        expiry_str = to_presentation_tz(expiry_date).strftime(f'%Y-%m-%d %H:%M:%S {settings.APP_TIMEZONE}') if expiry_date else "Never"
+        exam_date_str = to_presentation_tz(exam_date).strftime(f'%Y-%m-%d %H:%M:%S {settings.APP_TIMEZONE}')
         
         html_body = f"""
         <html>

@@ -29,11 +29,19 @@ class AuthService:
     async def register(self, data: RegisterRequest) -> dict:
         existing_user = await self.user_repo.get_by_email(data.email)
         if existing_user:
-            # For security, we don't say "email exists", but our requirements say:
-            # "Duplicate Email: Must be unique... Returning a generic response is recommended"
-            # We'll just generate a mock email or raise a generic error.
-            # To be clear for the frontend UX, returning an error "Email already associated" was recommended in the spec.
-            raise AuthorizationError("This email is already associated with an account. Please log in.")
+            if existing_user.is_active or existing_user.account_status == "ACTIVE":
+                raise AuthorizationError("This email is already associated with an account. Please log in.")
+            
+            # User exists but is not verified. Resend OTP to allow them to continue.
+            # generate_otp automatically invalidates previous unexpired OTPs.
+            otp_code = await self.otp_service.generate_otp(existing_user.id, "REGISTRATION")
+            await EmailService.send_otp_email(existing_user.email, otp_code, "REGISTRATION")
+            
+            # Include email in the response so the frontend knows who to verify
+            return {
+                "message": "Verification email resent. Please verify your email.",
+                "email": existing_user.email
+            }
         
         # Determine Role (Examiner by default or lookup by name)
         result = await self.db.execute(select(Role).where(Role.name == "Examiner"))

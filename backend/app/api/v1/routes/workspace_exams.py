@@ -59,6 +59,15 @@ async def update_exam(
     """Update a draft exam's properties and configurations."""
     return await service.update_domain_exam(exam_id, current_user.id, exam_in)
 
+@router.get("/{exam_id}/students", response_model=List[int])
+async def get_assigned_students(
+    exam_id: int,
+    current_user: User = RequireExaminer,
+    service: ExamService = Depends(get_exam_service)
+) -> Any:
+    """Get assigned students for an exam."""
+    return await service.get_assigned_students(exam_id, current_user.id)
+
 @router.post("/{exam_id}/students", status_code=status.HTTP_200_OK)
 async def assign_students(
     exam_id: int,

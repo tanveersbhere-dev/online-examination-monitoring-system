@@ -80,14 +80,14 @@ def upgrade() -> None:
     op.drop_index(op.f('ix_ai_events_id'), table_name='ai_events')
     op.drop_constraint(op.f('ai_events_exam_session_id_fkey'), 'ai_events', type_='foreignkey')
     op.create_foreign_key(None, 'ai_events', 'exam_sessions', ['exam_session_id'], ['id'])
-    op.add_column('exams', sa.Column('allow_resume_after_disconnect', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('global_navigation', sa.String(length=50), nullable=False))
-    op.add_column('exams', sa.Column('randomize_sections', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('randomize_questions', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('allow_review_before_submit', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('show_remaining_time', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('show_question_numbers', sa.Boolean(), nullable=False))
-    op.add_column('exams', sa.Column('show_marks', sa.Boolean(), nullable=False))
+    op.add_column('exams', sa.Column('allow_resume_after_disconnect', sa.Boolean(), server_default='true', nullable=False))
+    op.add_column('exams', sa.Column('global_navigation', sa.String(length=50), server_default='FREE', nullable=False))
+    op.add_column('exams', sa.Column('randomize_sections', sa.Boolean(), server_default='false', nullable=False))
+    op.add_column('exams', sa.Column('randomize_questions', sa.Boolean(), server_default='false', nullable=False))
+    op.add_column('exams', sa.Column('allow_review_before_submit', sa.Boolean(), server_default='true', nullable=False))
+    op.add_column('exams', sa.Column('show_remaining_time', sa.Boolean(), server_default='true', nullable=False))
+    op.add_column('exams', sa.Column('show_question_numbers', sa.Boolean(), server_default='true', nullable=False))
+    op.add_column('exams', sa.Column('show_marks', sa.Boolean(), server_default='true', nullable=False))
     # ### end Alembic commands ###
 
 

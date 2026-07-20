@@ -151,6 +151,7 @@ class StudentService:
             select(Exam)
             .join(ExamSession, Exam.id == ExamSession.exam_id)
             .where(ExamSession.student_id == student_id)
+            .where(Exam.status != "DRAFT")
         )
         exams = result.scalars().all()
         responses = []

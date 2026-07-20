@@ -7,11 +7,14 @@ from app.database.base import BaseEntity
 if TYPE_CHECKING:
     from .exam import Exam
     from .exam_question_rule import ExamQuestionRule
+    from .question_paper import QuestionPaper
 
 class ExamSectionRule(BaseEntity):
     __tablename__ = "exam_section_rules"
     
-    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), nullable=True)
+    question_paper_id: Mapped[int] = mapped_column(ForeignKey("question_papers.id", ondelete="CASCADE"), nullable=True)
+    
     section_index: Mapped[int] = mapped_column(Integer, nullable=False)
     section_name: Mapped[str] = mapped_column(String(255), nullable=False)
     section_type: Mapped[str] = mapped_column(String(50), nullable=False, default="MCQ")
@@ -27,4 +30,5 @@ class ExamSectionRule(BaseEntity):
     instructions: Mapped[str] = mapped_column(String, nullable=True)
 
     exam: Mapped["Exam"] = relationship("Exam", back_populates="section_rules")
+    question_paper: Mapped["QuestionPaper"] = relationship("QuestionPaper", back_populates="section_rules")
     question_rules: Mapped[List["ExamQuestionRule"]] = relationship("ExamQuestionRule", back_populates="section_rule", cascade="all, delete-orphan")

@@ -15,6 +15,9 @@ class ExamBase(BaseModel):
     scheduled_end: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     timezone: str = Field("UTC", max_length=50)
+    
+    # Association
+    question_paper_id: Optional[int] = None
 
     # Configs
     passing_marks: int = 50

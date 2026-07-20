@@ -10,7 +10,7 @@ from app.schemas.user_auth import UserResponse
 from app.services.question_paper_service import QuestionPaperService
 from app.security.dependencies import get_current_user
 from app.security.permissions import RoleChecker
-from app.services.exceptions import QuestionPaperNotFoundError, AuthorizationError
+from app.services.exceptions import QuestionPaperNotFoundError, AuthorizationError, InvalidExamStateError
 
 router = APIRouter()
 
@@ -95,6 +95,8 @@ async def update_question_paper(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorizationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except InvalidExamStateError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.put("/{paper_id}/file", response_model=QuestionPaperResponse)
 async def update_question_paper_file(
@@ -110,6 +112,8 @@ async def update_question_paper_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorizationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except InvalidExamStateError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -126,3 +130,54 @@ async def delete_question_paper(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorizationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except InvalidExamStateError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{paper_id}/publish", response_model=QuestionPaperResponse)
+async def publish_question_paper(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = RequireManager
+):
+    service = QuestionPaperService(db)
+    try:
+        return await service.publish_paper(paper_id, current_user)
+    except QuestionPaperNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{paper_id}/lock", response_model=QuestionPaperResponse)
+async def lock_question_paper(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = RequireManager
+):
+    service = QuestionPaperService(db)
+    try:
+        return await service.lock_paper(paper_id, current_user)
+    except QuestionPaperNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{paper_id}/archive", response_model=QuestionPaperResponse)
+async def archive_question_paper(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = RequireManager
+):
+    service = QuestionPaperService(db)
+    try:
+        return await service.archive_paper(paper_id, current_user)
+    except QuestionPaperNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+

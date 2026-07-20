@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Online Examination Monitoring System API"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+    APP_TIMEZONE: str = "Asia/Karachi"
     
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
     "http://localhost:5173",

@@ -23,6 +23,7 @@ class Exam(BaseEntity):
     
     # Draft workflow: nullable ForeignKeys and Schedules
     question_paper_id: Mapped[int] = mapped_column(ForeignKey("question_papers.id"), nullable=True)
+    question_paper_version: Mapped[int] = mapped_column(Integer, nullable=True)
     scheduled_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=True)

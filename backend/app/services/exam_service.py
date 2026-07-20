@@ -312,6 +312,14 @@ class ExamService:
         result = await self.db.execute(query)
         return [DomainExamResponse.model_validate(e) for e in result.scalars().all()]
 
+    async def get_assigned_students(self, exam_id: int, user_id: int) -> List[int]:
+        exam = await self.exam_repo.get_by_id(exam_id)
+        if not exam or exam.created_by != user_id:
+            raise ExamNotFoundError("Exam not found or unauthorized.")
+            
+        result = await self.db.execute(select(ExamAssignment.student_id).where(ExamAssignment.exam_id == exam_id))
+        return list(result.scalars().all())
+
     async def assign_repository_students(self, exam_id: int, student_ids: List[int], user_id: int) -> int:
         exam = await self.exam_repo.get_by_id(exam_id)
         if not exam or exam.created_by != user_id:
@@ -350,7 +358,20 @@ class ExamService:
         return len(new_ids)
 
     async def publish_exam(self, exam_id: int, user_id: int) -> DomainExamResponse:
-        exam = await self.exam_repo.get_by_id(exam_id)
+        from sqlalchemy.orm import selectinload
+        from app.models.question_paper import QuestionPaper
+        from app.models.exam_section_rule import ExamSectionRule
+        from app.models.exam_question_rule import ExamQuestionRule
+        
+        # We need to eager load the question paper and its nested rules
+        query = select(Exam).options(
+            selectinload(Exam.question_paper).selectinload(QuestionPaper.section_rules).selectinload(ExamSectionRule.question_rules).selectinload(ExamQuestionRule.options),
+            selectinload(Exam.section_rules)
+        ).where(Exam.id == exam_id)
+        
+        result = await self.db.execute(query)
+        exam = result.scalar_one_or_none()
+        
         if not exam or exam.created_by != user_id:
             raise ExamNotFoundError("Exam not found or unauthorized.")
             
@@ -364,8 +385,85 @@ class ExamService:
         if not exam.question_paper_id:
             raise InvalidExamStateError("Cannot publish without a question paper.")
             
-        updated_exam = await self.exam_repo.update(exam, status="READY")
-        return DomainExamResponse.model_validate(updated_exam)
+        # STRUCTURED MODE CLONING LOGIC
+        if exam.question_paper and exam.question_paper.mode == "STRUCTURED":
+            # Clear any existing exam_id rules just in case
+            await self.db.execute(select(ExamSectionRule).where(ExamSectionRule.exam_id == exam_id))
+            for s in exam.section_rules:
+                await self.db.delete(s)
+            await self.db.flush()
+            
+            # Deep clone from question_paper to exam
+            from app.models.exam_section_rule import ExamSectionRule
+            from app.models.exam_question_rule import ExamQuestionRule
+            
+            for src_section in exam.question_paper.section_rules:
+                new_section = ExamSectionRule(
+                    exam_id=exam.id,
+                    question_paper_id=None, # This belongs purely to the exam now
+                    section_index=src_section.section_index,
+                    section_name=src_section.section_name,
+                    section_type=src_section.section_type,
+                    section_duration_minutes=src_section.section_duration_minutes,
+                    navigation_policy=src_section.navigation_policy,
+                    allow_return_to_previous=src_section.allow_return_to_previous,
+                    lock_after_timeout=src_section.lock_after_timeout,
+                    randomize_questions=src_section.randomize_questions,
+                    require_completion_before_next=src_section.require_completion_before_next,
+                    section_weight=src_section.section_weight,
+                    instructions=src_section.instructions
+                )
+                self.db.add(new_section)
+                await self.db.flush() # flush to get new_section.id
+                
+                for src_question in src_section.question_rules:
+                    new_question = ExamQuestionRule(
+                        exam_id=exam.id,
+                        question_paper_id=None,
+                        section_rule_id=new_section.id,
+                        question_index=src_question.question_index,
+                        question_type=src_question.question_type,
+                        marks=src_question.marks,
+                        is_required=src_question.is_required,
+                        question_text=src_question.question_text,
+                        image_url=src_question.image_url,
+                        explanation=src_question.explanation,
+                        difficulty=src_question.difficulty,
+                        character_limit=src_question.character_limit,
+                        word_limit=src_question.word_limit,
+                        attachment_allowed=src_question.attachment_allowed,
+                        autosave=src_question.autosave,
+                        individual_submission=src_question.individual_submission,
+                        editable_after_submission=src_question.editable_after_submission,
+                        allow_multiple_submissions=src_question.allow_multiple_submissions,
+                        max_submission_count=src_question.max_submission_count,
+                        allow_editing_until_final=src_question.allow_editing_until_final,
+                        lock_immediately_after_submission=src_question.lock_immediately_after_submission,
+                        show_correctness_immediately=src_question.show_correctness_immediately,
+                        instructions=src_question.instructions
+                    )
+                    self.db.add(new_question)
+                    
+                    # We don't necessarily clone QuestionOptions into a new table because the options belong to the question rule 
+                    # WAIT, the options belong to ExamQuestionRule. Since we created a new ExamQuestionRule, we MUST clone the options!
+                    await self.db.flush() # get new_question.id
+                    
+                    from app.models.question_option import QuestionOption
+                    for src_opt in src_question.options:
+                        new_opt = QuestionOption(
+                            question_rule_id=new_question.id,
+                            option_text=src_opt.option_text,
+                            is_correct=src_opt.is_correct
+                        )
+                        self.db.add(new_opt)
+            
+            # Record the version
+            exam.question_paper_version = exam.question_paper.version
+            
+        exam.status = "READY"
+        await self.db.commit()
+        await self.db.refresh(exam)
+        return DomainExamResponse.model_validate(exam)
 
     # --- AI ORCHESTRATION & STATE MANAGEMENT ---
 

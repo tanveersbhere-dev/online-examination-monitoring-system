@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 
 from app.models.otp import OTP
 from app.services.exceptions import AuthorizationError
+from app.utils.timezone import get_utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,8 @@ class OTPService:
     async def generate_otp(self, user_id: int, purpose: str, new_email: str = None) -> str:
         # Check if user has exceeded resend limits recently
         # For simplicity, we just count active OTPs generated in the last hour
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        now_naive = get_utc_now()
+        one_hour_ago = now_naive - timedelta(hours=1)
         query = select(OTP).where(
             OTP.user_id == user_id,
             OTP.purpose == purpose,
@@ -36,7 +38,7 @@ class OTPService:
             OTP.user_id == user_id,
             OTP.purpose == purpose,
             OTP.is_used == False,
-            OTP.expires_at > datetime.now(timezone.utc)
+            OTP.expires_at > now_naive
         )
         result = await self.db.execute(invalidate_query)
         old_otps = result.scalars().all()
@@ -45,7 +47,7 @@ class OTPService:
             
         # Generate new OTP
         otp_code = str(random.randint(100000, 999999))
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=self.OTP_EXPIRY_MINUTES)
+        expires_at = now_naive + timedelta(minutes=self.OTP_EXPIRY_MINUTES)
         
         new_otp = OTP(
             user_id=user_id,
@@ -76,14 +78,12 @@ class OTPService:
             await self.db.commit()
             raise AuthorizationError("Maximum OTP verification attempts reached. Please request a new one.")
 
-        # If using naive datetime, handle appropriately. Since we used timezone=True in models
-        now = datetime.now(timezone.utc)
-        # Check if expires_at is naive and add tzinfo if needed
+        now_naive = get_utc_now()
         expires_at = otp_record.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
             
-        if expires_at < now:
+        if expires_at < now_naive:
             otp_record.is_used = True
             await self.db.commit()
             raise AuthorizationError("OTP has expired. Please request a new one.")

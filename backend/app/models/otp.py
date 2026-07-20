@@ -14,7 +14,7 @@ class OTP(BaseEntity):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     otp_code: Mapped[str] = mapped_column(String(6), nullable=False)
     purpose: Mapped[str] = mapped_column(String(50), nullable=False) # e.g., 'REGISTRATION', 'PASSWORD_RESET', 'EMAIL_CHANGE'
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     resend_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

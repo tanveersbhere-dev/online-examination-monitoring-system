@@ -5,6 +5,7 @@ import {
   Chip, IconButton, InputAdornment, Tooltip, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions, Alert, CircularProgress
 } from '@mui/material';
+import AssessmentBuilderUI from '../../components/examiner/AssessmentBuilderUI';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -39,18 +40,18 @@ const QuestionPapersPage = () => {
   const [papers, setPapers] = useState<QuestionPaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modal state
   const [openModal, setOpenModal] = useState(false);
   const [updateMode, setUpdateMode] = useState<number | null>(null);
-  
+
   const [title, setTitle] = useState('');
   const [course, setCourse] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchPapers = async () => {
@@ -77,12 +78,20 @@ const QuestionPapersPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+
+
+  // ... Inside QuestionPapersPage component ...
+  const [authoringMode, setAuthoringMode] = useState<'FILE' | 'STRUCTURED'>('FILE');
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [activeBuilderPaperId, setActiveBuilderPaperId] = useState<number | null>(null);
+
   const handleOpenUpload = () => {
     setUpdateMode(null);
     setTitle('');
     setCourse('');
     setDescription('');
     setFile(null);
+    setAuthoringMode('FILE');
     setOpenModal(true);
   };
 
@@ -92,21 +101,14 @@ const QuestionPapersPage = () => {
     setCourse(paper.course_name);
     setDescription(paper.description || '');
     setFile(null);
+    // @ts-ignore
+    setAuthoringMode(paper.mode || 'FILE');
     setOpenModal(true);
   };
 
-  const handlePreview = (id: number) => {
-    const token = localStorage.getItem('access_token');
-    // Using simple fetch to handle binary and pop open a blob url, since direct window.open lacks Auth headers
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/question-papers/${id}/download?preview=true`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(response => response.blob())
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    })
-    .catch(err => alert("Error loading preview."));
+  const handleBuild = (paperId: number) => {
+    setActiveBuilderPaperId(paperId);
+    setBuilderOpen(true);
   };
 
   const handleSave = async () => {
@@ -117,8 +119,8 @@ const QuestionPapersPage = () => {
       if (updateMode) {
         // Update Metadata
         await apiClient.put(`/question-papers/${updateMode}`, { title, course_name: course, description });
-        // Update File if selected
-        if (file) {
+        // Update File if selected and in FILE mode
+        if (authoringMode === 'FILE' && file) {
           const fileData = new FormData();
           fileData.append('file', file);
           await apiClient.put(`/question-papers/${updateMode}/file`, fileData, {
@@ -126,20 +128,39 @@ const QuestionPapersPage = () => {
           });
         }
       } else {
-        if (!title || !course || !file) {
-          setError("Please fill out all required fields and select a file.");
+        if (!title || !course) {
+          setError("Please fill out all required fields.");
           setUploading(false);
           return;
         }
-        const formData = new FormData();
-        formData.append('title', title);
-        formData.append('course_name', course);
-        if (description) formData.append('description', description);
-        formData.append('file', file);
 
-        await apiClient.post('/question-papers', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        if (authoringMode === 'FILE') {
+          if (!file) {
+            setError("Please select a file for FILE mode.");
+            setUploading(false);
+            return;
+          }
+          const formData = new FormData();
+          formData.append('title', title);
+          formData.append('course_name', course);
+          if (description) formData.append('description', description);
+          formData.append('file', file);
+
+          await apiClient.post('/question-papers', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } else {
+          // Create STRUCTURED paper
+          const res = await apiClient.post('/question-paper-builder', {
+            title, course_name: course, description
+          });
+          // Open builder automatically
+          setOpenModal(false);
+          setUploading(false);
+          fetchPapers();
+          handleBuild(res.data.id);
+          return;
+        }
       }
 
       setOpenModal(false);
@@ -161,8 +182,43 @@ const QuestionPapersPage = () => {
     }
   };
 
-  const filteredPapers = papers.filter(p => 
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const handlePreview = (paperId: number) => {
+    window.open(`${apiClient.defaults.baseURL}/question-papers/${paperId}/download?preview=true`, '_blank');
+  };
+
+  const handlePublish = async (id: number) => {
+    if (!confirm("Are you sure you want to publish this paper? It will become READY for exam assignment.")) return;
+    try {
+      await apiClient.post(`/question-papers/${id}/publish`);
+      fetchPapers();
+    } catch (err: any) {
+      alert(getErrorMessage(err));
+    }
+  };
+
+  const handleLock = async (id: number) => {
+    if (!confirm("Are you sure you want to lock this paper? It will become immutable.")) return;
+    try {
+      await apiClient.post(`/question-papers/${id}/lock`);
+      fetchPapers();
+    } catch (err: any) {
+      alert(getErrorMessage(err));
+    }
+  };
+
+  const handleArchive = async (id: number) => {
+    if (!confirm("Are you sure you want to archive this paper? It will no longer be available for new exams.")) return;
+    try {
+      await apiClient.post(`/question-papers/${id}/archive`);
+      fetchPapers();
+    } catch (err: any) {
+      alert(getErrorMessage(err));
+    }
+  };
+
+
+  const filteredPapers = papers.filter(p =>
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.course_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -171,7 +227,7 @@ const QuestionPapersPage = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" fontWeight={600}>Assessment Repository</Typography>
         <Button variant="contained" startIcon={<UploadFileIcon />} sx={{ borderRadius: 2 }} onClick={handleOpenUpload}>
-          Upload Assessment
+          Create Assessment
         </Button>
       </Box>
 
@@ -196,6 +252,7 @@ const QuestionPapersPage = () => {
                 <TableRow>
                   <TableCell>Title</TableCell>
                   <TableCell>Course</TableCell>
+                  <TableCell>Mode</TableCell>
                   <TableCell>Revision</TableCell>
                   <TableCell>Size</TableCell>
                   <TableCell>Status</TableCell>
@@ -204,11 +261,13 @@ const QuestionPapersPage = () => {
               </TableHead>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={6} align="center"><CircularProgress size={24} sx={{ my: 2 }} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} align="center"><CircularProgress size={24} sx={{ my: 2 }} /></TableCell></TableRow>
                 ) : filteredPapers.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} align="center"><Typography color="text.secondary">No assessments found.</Typography></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} align="center"><Typography color="text.secondary">No assessments found.</Typography></TableCell></TableRow>
                 ) : filteredPapers.map((paper) => {
                   const cfg = STATUS_CONFIG[paper.status] || STATUS_CONFIG['DRAFT'];
+                  // @ts-ignore
+                  const isStructured = paper.mode === 'STRUCTURED';
                   return (
                     <TableRow key={paper.id} hover>
                       <TableCell>
@@ -221,15 +280,31 @@ const QuestionPapersPage = () => {
                         </Box>
                       </TableCell>
                       <TableCell><Chip label={paper.course_name} size="small" variant="outlined" /></TableCell>
+                      <TableCell><Chip label={isStructured ? "Structured" : "File"} size="small" color={isStructured ? "secondary" : "default"} /></TableCell>
                       <TableCell><Typography variant="body2">v{paper.revision}</Typography></TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary">{formatBytes(paper.file_size_bytes)}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" color="text.secondary">{isStructured ? '-' : formatBytes(paper.file_size_bytes)}</Typography></TableCell>
                       <TableCell><Chip label={cfg.label} color={cfg.color} size="small" /></TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                          <Tooltip title="Preview PDF"><IconButton size="small" onClick={() => handlePreview(paper.id)}><VisibilityIcon fontSize="small" /></IconButton></Tooltip>
-                          {paper.status !== 'LOCKED' && (
+                          {isStructured ? (
+                            <Tooltip title="Build/Edit Questions"><Button size="small" variant="outlined" onClick={() => handleBuild(paper.id)} disabled={paper.status === 'LOCKED' || paper.status === 'ARCHIVED'}>Builder</Button></Tooltip>
+                          ) : (
+                            <Tooltip title="Preview PDF"><IconButton size="small" onClick={() => handlePreview(paper.id)}><VisibilityIcon fontSize="small" /></IconButton></Tooltip>
+                          )}
+                          
+                          {paper.status === 'DRAFT' && (
+                            <Tooltip title="Publish to Ready"><Button size="small" color="primary" onClick={() => handlePublish(paper.id)}>Publish</Button></Tooltip>
+                          )}
+                          {paper.status === 'READY' && (
+                            <Tooltip title="Lock to prevent changes"><Button size="small" color="secondary" onClick={() => handleLock(paper.id)}>Lock</Button></Tooltip>
+                          )}
+                          {paper.status === 'LOCKED' && (
+                            <Tooltip title="Archive"><Button size="small" color="warning" onClick={() => handleArchive(paper.id)}>Archive</Button></Tooltip>
+                          )}
+
+                          {paper.status !== 'LOCKED' && paper.status !== 'ARCHIVED' && (
                             <>
-                              <Tooltip title="Edit Metadata & File"><IconButton size="small" color="primary" onClick={() => handleOpenUpdate(paper)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                              <Tooltip title="Edit Metadata"><IconButton size="small" color="primary" onClick={() => handleOpenUpdate(paper)}><EditIcon fontSize="small" /></IconButton></Tooltip>
                               <Tooltip title="Delete"><IconButton size="small" sx={{ color: 'error.main' }} onClick={() => handleDelete(paper.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                             </>
                           )}
@@ -246,36 +321,58 @@ const QuestionPapersPage = () => {
 
       {/* Upload/Edit Modal */}
       <Dialog open={openModal} onClose={() => !uploading && setOpenModal(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{updateMode ? 'Edit Assessment' : 'Upload Assessment'}</DialogTitle>
+        <DialogTitle>{updateMode ? 'Edit Assessment' : 'Create Assessment'}</DialogTitle>
         <DialogContent dividers>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Stack spacing={3} sx={{ mt: 1 }}>
+
+            {!updateMode && (
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Typography>Authoring Mode:</Typography>
+                <Chip label="FILE UPLOAD" color={authoringMode === 'FILE' ? 'primary' : 'default'} onClick={() => setAuthoringMode('FILE')} />
+                <Chip label="STRUCTURED BUILDER" color={authoringMode === 'STRUCTURED' ? 'primary' : 'default'} onClick={() => setAuthoringMode('STRUCTURED')} />
+              </Box>
+            )}
+
             <TextField label="Assessment Title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={uploading} fullWidth required />
             <TextField label="Course Name" value={course} onChange={(e) => setCourse(e.target.value)} disabled={uploading} fullWidth required />
             <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={uploading} fullWidth multiline rows={2} />
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>Document {updateMode ? '(Optional: Select to replace current revision)' : '*'}</Typography>
-              <input type="file" accept=".pdf,.docx,.txt" ref={fileInputRef} style={{ display: 'none' }} onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} />
-              <Box 
-                sx={{ 
-                  border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 2, 
-                  textAlign: 'center', cursor: 'pointer',
-                  bgcolor: file ? 'primary.light' : 'transparent',
-                  color: file ? 'primary.main' : 'text.secondary'
-                }}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {file ? file.name : 'Click to select a file (PDF, DOCX, TXT)'}
+
+            {authoringMode === 'FILE' && (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>Document {updateMode ? '(Optional: Select to replace current revision)' : '*'}</Typography>
+                <input type="file" accept=".pdf,.docx,.txt" ref={fileInputRef} style={{ display: 'none' }} onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} />
+                <Box
+                  sx={{
+                    border: '1px dashed', borderColor: 'divider', borderRadius: 1, p: 2,
+                    textAlign: 'center', cursor: 'pointer',
+                    bgcolor: file ? 'primary.light' : 'transparent',
+                    color: file ? 'primary.main' : 'text.secondary'
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {file ? file.name : 'Click to select a file (PDF, DOCX, TXT)'}
+                </Box>
               </Box>
-            </Box>
+            )}
+
+            {authoringMode === 'STRUCTURED' && !updateMode && (
+              <Alert severity="info">You will be redirected to the Assessment Builder to configure questions after creating this entry.</Alert>
+            )}
+
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenModal(false)} disabled={uploading}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={uploading || (!updateMode && (!title || !course || !file))}>
-            {uploading ? 'Saving...' : updateMode ? 'Save Changes' : 'Upload'}
+          <Button variant="contained" onClick={handleSave} disabled={uploading || (!updateMode && (!title || !course || (authoringMode === 'FILE' && !file)))}>
+            {uploading ? 'Saving...' : updateMode ? 'Save Changes' : (authoringMode === 'FILE' ? 'Upload' : 'Create & Build')}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Builder Full Screen Dialog */}
+      <Dialog open={builderOpen} fullScreen onClose={() => { setBuilderOpen(false); fetchPapers(); }}>
+        {activeBuilderPaperId && <AssessmentBuilderUI paperId={activeBuilderPaperId} onClose={() => { setBuilderOpen(false); fetchPapers(); }} />}
       </Dialog>
     </Box>
   );

@@ -54,6 +54,25 @@ class AIEngineThread(threading.Thread):
             
             # Setup bridge to Websocket and Event Processor
             def ws_bridge_callback(event):
+                # Evidence Dumping
+                if event.severity.name in ["HIGH", "CRITICAL"] and getattr(self.context, "current_frame", None) is not None:
+                    try:
+                        import os
+                        import cv2
+                        import uuid
+                        from app.core.config import settings
+                        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+                        filename = f"evidence_{uuid.uuid4().hex}.jpg"
+                        frame_path = os.path.join(settings.UPLOAD_DIR, filename)
+                        cv2.imwrite(frame_path, self.context.current_frame.original_frame)
+                        
+                        # Ensure payload is a dictionary and inject frame_path
+                        if not isinstance(event.payload, dict):
+                            event.payload = {}
+                        event.payload["frame_path"] = frame_path
+                    except Exception as e:
+                        logger.error(f"Failed to dump evidence: {e}")
+
                 dto = AIEventDTO(
                     event_type=event.event_type.name,
                     timestamp=event.timestamp,
@@ -73,59 +92,103 @@ class AIEngineThread(threading.Thread):
             self.event_bus.subscribe(None, ws_bridge_callback)
             self.event_bus.start()
             
-            self.camera_manager = CameraManager(
-                camera_id=config.camera.camera_id,
-                width=config.camera.width,
-                height=config.camera.height,
-                fps=config.camera.fps,
-                exam_context=self.context
-            )
-            self.camera_manager.initialize()
-            self.camera_manager.start()
+            # CameraManager dependency has been removed. Frames are ingested via the /frame endpoint.
             
             # Try to load and initialize processors
             try:
-                from ai_engine.detectors.face_detection.mediapipe_detector import MediaPipeFaceDetector
-                from ai_engine.detectors.face_detection.models import FaceDetectionConfig
+                from ai_engine.detectors import MediaPipeFaceDetector, FaceDetectionConfig
+                from ai_engine.detectors import MediaPipeLandmarkDetector, LandmarkDetectionConfig
+                from ai_engine.estimators import SolvePnPHeadPoseEstimator, HeadPoseConfig
+                from ai_engine.features import (
+                    MediaPipeEyeGazeExtractor, EyeGazeConfig,
+                    TemporalFacePresenceProcessor, FacePresenceConfig,
+                    EmbeddingIdentityProcessor, FaceIdentityConfig,
+                    MediaPipeEARProcessor, EARConfig,
+                    MediaPipeMARProcessor, MARConfig,
+                    TemporalBlinkProcessor, BlinkDetectionConfig
+                )
+                from ai_engine.environment.object_detection.yolo_detector import YOLODetector
+                from ai_engine.environment.object_detection.models import ObjectDetectionConfig
+
+                # 1. Face Detection
                 fd = MediaPipeFaceDetector(FaceDetectionConfig())
                 fd.initialize()
                 fd.start()
                 self.processors.append(fd)
-            except Exception as e:
-                logger.warning(f"Could not init FaceDetector: {e}")
                 
-            try:
-                from ai_engine.features.face_identity.embedding_processor import EmbeddingIdentityProcessor
-                from ai_engine.features.face_identity.models import FaceIdentityConfig
+                # 2. Landmark Detection
+                ld = MediaPipeLandmarkDetector(LandmarkDetectionConfig())
+                ld.initialize()
+                ld.start()
+                self.processors.append(ld)
+                
+                # 3. Head Pose
+                hp = SolvePnPHeadPoseEstimator(HeadPoseConfig())
+                hp.initialize()
+                hp.start()
+                self.processors.append(hp)
+                
+                # 4. EAR
+                ear = MediaPipeEARProcessor(EARConfig())
+                ear.initialize()
+                ear.start()
+                self.processors.append(ear)
+
+                # 5. MAR
+                mar = MediaPipeMARProcessor(MARConfig())
+                mar.initialize()
+                mar.start()
+                self.processors.append(mar)
+
+                # 6. Blink
+                blink = TemporalBlinkProcessor(BlinkDetectionConfig())
+                blink.initialize()
+                blink.start()
+                self.processors.append(blink)
+
+                # 7. Eye Gaze
+                gaze = MediaPipeEyeGazeExtractor(EyeGazeConfig())
+                gaze.initialize()
+                gaze.start()
+                self.processors.append(gaze)
+
+                # 8. Face Identity
                 id_proc = EmbeddingIdentityProcessor(FaceIdentityConfig())
+                if self.reference_embedding:
+                    import numpy as np
+                    id_proc.update_reference_embedding(np.array(self.reference_embedding))
                 id_proc.initialize()
                 id_proc.start()
                 self.processors.append(id_proc)
-            except Exception as e:
-                logger.warning(f"Could not init IdentityProcessor: {e}")
-                
-            try:
-                from ai_engine.environment.object_detection.yolo_detector import YOLODetector
-                from ai_engine.environment.object_detection.models import ObjectDetectionConfig
+
+                # 9. Face Presence
+                fp = TemporalFacePresenceProcessor(FacePresenceConfig())
+                fp.initialize()
+                fp.start()
+                self.processors.append(fp)
+
+                # 10. Object Detection (YOLO)
                 od = YOLODetector(ObjectDetectionConfig())
                 od.initialize()
                 od.start()
                 self.processors.append(od)
+
             except Exception as e:
-                logger.warning(f"Could not init ObjectDetector: {e}")
+                logger.warning(f"Could not init some AI processors: {e}")
 
             # Main loop
+            self.last_frame = None
             while self.running:
-                self.camera_manager.process(self.context)
-                frame = self.camera_manager.get_frame(timeout=0.1)
+                frame = self.context.current_frame
                 
-                if frame is not None:
+                if frame is not None and frame is not self.last_frame:
                     # Process frame through all available processors
                     for p in self.processors:
                         try:
                             p.process(self.context)
                         except Exception as e:
                             logger.error(f"Processor error: {e}")
+                    self.last_frame = frame
                 
                 time.sleep(0.01)
                 
@@ -138,9 +201,6 @@ class AIEngineThread(threading.Thread):
         self.running = False
         
     def cleanup(self):
-        if self.camera_manager:
-            self.camera_manager.stop()
-            self.camera_manager.cleanup()
         for p in self.processors:
             try:
                 p.stop()

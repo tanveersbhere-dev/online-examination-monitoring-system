@@ -14,7 +14,8 @@ class QuestionPaperResponse(BaseModel):
     course_name: str
     description: Optional[str]
     uploaded_by: int
-    file_path: str
+    mode: str
+    file_path: Optional[str]
     file_size_bytes: int
     mime_type: str
     revision: int

@@ -85,6 +85,8 @@ const ExamBuilderPage = () => {
         ...res.data,
         question_paper_id: res.data.question_paper_id || ''
       });
+      const studentsRes = await apiClient.get(`/workspace/exams/${id}/students`);
+      setSelectedStudentIds(studentsRes.data);
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -114,6 +116,8 @@ const ExamBuilderPage = () => {
       try {
         const payload = { ...exam };
         if (!payload.question_paper_id) delete payload.question_paper_id;
+        if (!payload.scheduled_start) payload.scheduled_start = null;
+        if (!payload.scheduled_end) payload.scheduled_end = null;
         const res = await apiClient.post('/workspace/exams', payload);
         navigate(`/examiner/exams/build?id=${res.data.id}`, { replace: true });
       } catch (err) {
@@ -133,6 +137,8 @@ const ExamBuilderPage = () => {
           // Update details
           const payload = { ...exam };
           if (!payload.question_paper_id) delete payload.question_paper_id;
+          if (!payload.scheduled_start) payload.scheduled_start = null;
+          if (!payload.scheduled_end) payload.scheduled_end = null;
           await apiClient.put(`/workspace/exams/${examId}`, payload);
         }
       } catch (err) {
@@ -233,8 +239,8 @@ const ExamBuilderPage = () => {
             {activeStep === 1 && (
               <Stack spacing={3} maxWidth="md" mx="auto">
                 <Alert severity="info">All times are based on the server timezone: {exam.timezone}</Alert>
-                <TextField label="Scheduled Start Time" type="datetime-local" InputLabelProps={{ shrink: true }} value={exam.scheduled_start ? new Date(exam.scheduled_start).toISOString().slice(0, 16) : ''} onChange={e => setExam({ ...exam, scheduled_start: new Date(e.target.value).toISOString() })} fullWidth />
-                <TextField label="Scheduled End Time" type="datetime-local" InputLabelProps={{ shrink: true }} value={exam.scheduled_end ? new Date(exam.scheduled_end).toISOString().slice(0, 16) : ''} onChange={e => setExam({ ...exam, scheduled_end: new Date(e.target.value).toISOString() })} fullWidth />
+                <TextField label="Scheduled Start Time" type="datetime-local" InputLabelProps={{ shrink: true }} value={exam.scheduled_start ? new Date(exam.scheduled_start).toISOString().slice(0, 16) : ''} onChange={e => setExam({ ...exam, scheduled_start: e.target.value ? new Date(e.target.value).toISOString() : null })} fullWidth />
+                <TextField label="Scheduled End Time" type="datetime-local" InputLabelProps={{ shrink: true }} value={exam.scheduled_end ? new Date(exam.scheduled_end).toISOString().slice(0, 16) : ''} onChange={e => setExam({ ...exam, scheduled_end: e.target.value ? new Date(e.target.value).toISOString() : null })} fullWidth />
                 <TextField label="Duration (Minutes)" type="number" value={exam.duration_minutes} onChange={e => setExam({ ...exam, duration_minutes: parseInt(e.target.value) || 120 })} fullWidth />
               </Stack>
             )}

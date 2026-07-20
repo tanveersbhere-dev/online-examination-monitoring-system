@@ -19,10 +19,13 @@ class ExamRepository(BaseRepository[Exam]):
     def _base_query(self):
         """Returns a base query with explicit eager loading to prevent MissingGreenlet exceptions."""
         from app.models.exam_section_rule import ExamSectionRule
+        from app.models.exam_question_rule import ExamQuestionRule
         from sqlalchemy.orm import joinedload, selectinload
         return select(Exam).options(
             joinedload(Exam.question_paper),
-            selectinload(Exam.section_rules).selectinload(ExamSectionRule.question_rules)
+            selectinload(Exam.section_rules)
+            .selectinload(ExamSectionRule.question_rules)
+            .selectinload(ExamQuestionRule.options)
         )
 
     async def get_by_id(self, id: int) -> Optional[Exam]:

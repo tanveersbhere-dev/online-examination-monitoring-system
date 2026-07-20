@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, TYPE_CHECKING, Optional
-from sqlalchemy import String, ForeignKey, DateTime
+from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import BaseEntity
@@ -32,3 +32,7 @@ class ExamSession(BaseEntity):
     ai_events: Mapped[List["AIEvent"]] = relationship("AIEvent", back_populates="exam_session", cascade="all, delete-orphan")
     runtime_state: Mapped[Optional["RuntimeState"]] = relationship("RuntimeState", back_populates="exam_session", uselist=False, cascade="all, delete-orphan")
     candidate_answers: Mapped[List["CandidateAnswer"]] = relationship("CandidateAnswer", back_populates="exam_session", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("exam_id", "student_id", name="uq_exam_session_student"),
+    )

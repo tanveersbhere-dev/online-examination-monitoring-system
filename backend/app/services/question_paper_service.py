@@ -11,7 +11,7 @@ from app.models.question_paper import QuestionPaper
 from app.repositories.question_paper_repository import QuestionPaperRepository
 from app.schemas.question_paper import QuestionPaperUpdate
 from app.schemas.user_auth import UserResponse
-from app.services.exceptions import QuestionPaperNotFoundError, AuthorizationError
+from app.services.exceptions import QuestionPaperNotFoundError, AuthorizationError, InvalidExamStateError
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,9 @@ class QuestionPaperService:
         paper = await self.get_paper(paper_id)
         self._check_ownership(paper, current_user)
         
+        if paper.status in ["LOCKED", "ARCHIVED"]:
+            raise InvalidExamStateError("Cannot modify a locked or archived question paper.")
+        
         update_dict = update_data.model_dump(exclude_unset=True)
         updated_paper = await self.repository.update(paper, **update_dict)
         logger.info(f"Question paper {paper_id} updated by user {current_user.id}.")
@@ -113,6 +116,9 @@ class QuestionPaperService:
         """Updates a paper's physical file and increments the revision counter."""
         paper = await self.get_paper(paper_id)
         self._check_ownership(paper, current_user)
+        
+        if paper.status in ["LOCKED", "ARCHIVED"]:
+            raise InvalidExamStateError("Cannot modify a locked or archived question paper.")
         
         file_ext, mime_type = self._validate_file(file)
         unique_filename = f"{uuid.uuid4()}{file_ext}"
@@ -152,17 +158,57 @@ class QuestionPaperService:
         paper = await self.get_paper(paper_id)
         self._check_ownership(paper, current_user)
         
+        if paper.status in ["LOCKED", "ARCHIVED"]:
+            raise InvalidExamStateError("Cannot delete a locked or archived question paper.")
+        
         file_path = paper.file_path
         
         # Delete from DB
         await self.repository.delete(paper_id)
         
         # Delete from filesystem
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Deleted file {file_path}")
-        except OSError as e:
-            logger.error(f"Failed to delete file {file_path}: {e}")
+        if file_path:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"Deleted file {file_path}")
+            except OSError as e:
+                logger.error(f"Failed to delete file {file_path}: {e}")
         
         logger.info(f"Question paper {paper_id} deleted by user {current_user.id}.")
+
+    async def publish_paper(self, paper_id: int, current_user: UserResponse) -> QuestionPaper:
+        """Transitions paper from DRAFT to READY."""
+        paper = await self.get_paper(paper_id)
+        self._check_ownership(paper, current_user)
+        
+        if paper.status != "DRAFT":
+            raise InvalidExamStateError("Only DRAFT papers can be published.")
+            
+        updated_paper = await self.repository.update(paper, status="READY")
+        logger.info(f"Question paper {paper_id} published to READY by user {current_user.id}.")
+        return updated_paper
+
+    async def lock_paper(self, paper_id: int, current_user: UserResponse) -> QuestionPaper:
+        """Transitions paper from READY to LOCKED."""
+        paper = await self.get_paper(paper_id)
+        self._check_ownership(paper, current_user)
+        
+        if paper.status != "READY":
+            raise InvalidExamStateError("Only READY papers can be locked.")
+            
+        updated_paper = await self.repository.update(paper, status="LOCKED")
+        logger.info(f"Question paper {paper_id} locked by user {current_user.id}.")
+        return updated_paper
+
+    async def archive_paper(self, paper_id: int, current_user: UserResponse) -> QuestionPaper:
+        """Transitions paper from LOCKED to ARCHIVED."""
+        paper = await self.get_paper(paper_id)
+        self._check_ownership(paper, current_user)
+        
+        if paper.status != "LOCKED":
+            raise InvalidExamStateError("Only LOCKED papers can be archived.")
+            
+        updated_paper = await self.repository.update(paper, status="ARCHIVED")
+        logger.info(f"Question paper {paper_id} archived by user {current_user.id}.")
+        return updated_paper

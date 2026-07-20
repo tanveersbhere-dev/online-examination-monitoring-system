@@ -115,6 +115,31 @@ class ExamSessionService:
 
     # --- CANDIDATE RUNTIME METHODS ---
     
+    async def enforce_active_runtime(self, exam_id: int, user_id: int) -> ExamSessionResponse:
+        existing = await self.session_repo.get_by_student_and_exam(user_id, exam_id)
+        if not existing:
+            raise EntityNotFoundError("Session not found.")
+            
+        if existing.status != "RUNNING":
+            raise ValueError(f"Exam session is not active. Status: {existing.status}")
+            
+        if existing.start_time and existing.exam:
+            current_time = datetime.now(timezone.utc)
+            start_time = existing.start_time
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
+                
+            elapsed = (current_time - start_time).total_seconds()
+            allowed = existing.exam.duration_minutes * 60
+            
+            # Allow a small grace period (e.g. 5 seconds) for network latency
+            if elapsed > allowed + 5:
+                await self.submit_runtime_session(exam_id, user_id)
+                raise ValueError("Exam session has expired and was automatically submitted.")
+                
+        return existing
+
+
     async def start_runtime_session(self, exam_id: int, user_id: int) -> dict:
         from app.models.exam import Exam
         from sqlalchemy import select
@@ -132,6 +157,8 @@ class ExamSessionService:
         
         current_time = datetime.now(timezone.utc)
         
+        target_session = existing
+        
         if existing:
             if existing.status == "COMPLETED":
                 raise ValueError("You have already completed this exam.")
@@ -146,47 +173,70 @@ class ExamSessionService:
             runtime_service = RuntimeStateService(self.db)
             await runtime_service.initialize_state(existing.id)
             # Re-fetch to get eager loaded relations if necessary
-            existing = await self.session_repo.get_by_id(existing.id)
+            target_session = await self.session_repo.get_by_id(existing.id)
+        else:
+            raise ValueError("You are not assigned to this exam.")
             
-            start_time = existing.start_time
-            if start_time and start_time.tzinfo is None:
-                start_time = start_time.replace(tzinfo=timezone.utc)
-                
-            elapsed = (current_time - start_time).total_seconds() if start_time else 0
-            time_left = max(0, int((exam.duration_minutes * 60) - elapsed))
+        start_time = target_session.start_time
+        if start_time and start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=timezone.utc)
             
-            return {
-                "session": ExamSessionResponse.model_validate(existing),
-                "time_left_seconds": time_left,
-                "exam_config": {
-                    "duration_minutes": exam.duration_minutes,
-                    "title": exam.title
-                }
-            }
-            
-        # New Session Creation
-        new_session = await self.session_repo.create(
-            exam_id=exam_id,
-            student_id=user_id,
-            status="RUNNING"
-        )
-        new_session.start_time = current_time
-        await self.db.commit()
-        
-        from app.services.runtime_state_service import RuntimeStateService
-        runtime_service = RuntimeStateService(self.db)
-        await runtime_service.initialize_state(new_session.id)
-        
-        new_session = await self.session_repo.get_by_id(new_session.id)
-        
-        return {
-            "session": ExamSessionResponse.model_validate(new_session),
-            "time_left_seconds": exam.duration_minutes * 60,
+        elapsed = (current_time - start_time).total_seconds() if start_time else 0
+        time_left = max(0, int((exam.duration_minutes * 60) - elapsed))
+
+        # AI Orchestration Integration
+        try:
+            from app.services.ai_session_manager import AISessionManager
+            import json
+            user = await self.user_repo.get_by_id(user_id)
+            ref_embedding = json.loads(user.face_embedding) if user and user.face_embedding else None
+            AISessionManager.initialize_session(target_session.id, user_id, reference_embedding=ref_embedding)
+            AISessionManager.start_session(target_session.id)
+        except Exception as e:
+            logger.error(f"Failed to start AI session for ExamSession {target_session.id}: {e}")
+
+        # Build Runtime Payload
+        mode = "FILE"
+        if exam.question_paper and exam.question_paper.mode:
+            mode = exam.question_paper.mode
+
+        payload = {
+            "session": ExamSessionResponse.model_validate(target_session).model_dump(),
+            "time_left_seconds": time_left,
+            "mode": mode,
             "exam_config": {
                 "duration_minutes": exam.duration_minutes,
                 "title": exam.title
             }
         }
+
+        if mode == "FILE":
+            payload["file_url"] = f"/runtime/file?exam_id={exam.id}"
+        else:
+            sections_data = []
+            sorted_sections = sorted(exam.section_rules, key=lambda s: s.section_index)
+            for sec in sorted_sections:
+                sec_dict = {
+                    "id": str(sec.id),
+                    "section_index": sec.section_index,
+                    "section_name": sec.section_name,
+                    "section_type": sec.section_type,
+                    "questions": []
+                }
+                sorted_questions = sorted(sec.question_rules, key=lambda q: q.question_index)
+                for q in sorted_questions:
+                    q_dict = {
+                        "id": str(q.id),
+                        "question_index": q.question_index,
+                        "question_type": q.question_type,
+                        "text": q.question_text or "No text provided.",
+                        "options": [opt.option_text for opt in q.options]
+                    }
+                    sec_dict["questions"].append(q_dict)
+                sections_data.append(sec_dict)
+            payload["sections"] = sections_data
+
+        return payload
 
     async def submit_runtime_session(self, exam_id: int, user_id: int) -> ExamSessionResponse:
         existing = await self.session_repo.get_by_student_and_exam(user_id, exam_id)
@@ -200,5 +250,12 @@ class ExamSessionService:
         existing.end_time = datetime.now(timezone.utc)
         await self.db.commit()
         existing = await self.session_repo.get_by_id(existing.id)
+        
+        # AI Orchestration Integration
+        try:
+            from app.services.ai_session_manager import AISessionManager
+            AISessionManager.stop_session(existing.id)
+        except Exception as e:
+            logger.error(f"Failed to stop AI session for ExamSession {existing.id}: {e}")
         
         return ExamSessionResponse.model_validate(existing)

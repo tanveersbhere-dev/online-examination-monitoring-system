@@ -19,10 +19,14 @@ from .ai_session import AISession
 from .question_paper import QuestionPaper
 from .exam_section_rule import ExamSectionRule
 from .exam_question_rule import ExamQuestionRule
+from .question_option import QuestionOption
+from .runtime_state import RuntimeState
+from .candidate_answer import CandidateAnswer
 
 __all__ = [
     "User", "Role", "WorkspacePreference", "Exam", "ExamSupervisor", 
     "ExamAssignment", "ExamSession", "Student", "OTP", "AIEvent", 
     "Evidence", "SystemLog", "Notification", "Activity", "SystemSetting",
-    "Violation", "AISession", "QuestionPaper", "ExamSectionRule", "ExamQuestionRule"
+    "Violation", "AISession", "QuestionPaper", "ExamSectionRule", "ExamQuestionRule",
+    "QuestionOption", "RuntimeState", "CandidateAnswer"
 ]

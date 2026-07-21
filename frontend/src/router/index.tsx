@@ -47,20 +47,14 @@ const router = createBrowserRouter([
     children: [{ index: true, element: <LandingPage /> }],
   },
 
-  // Student Flow - Open Routes
+  // Student Flow
   {
     path: '/student',
     element: <StudentLayout />,
     children: [
+      // Open routes
       { path: 'login', element: <StudentLoginPage /> },
-    ],
-  },
-
-  // Student Flow - Protected Routes
-  {
-    path: '/student',
-    element: <StudentLayout />,
-    children: [
+      // Protected routes
       {
         element: <ProtectedRoute allowedRoles={['Student']} redirectPath="/student/login" />,
         children: [

@@ -7,6 +7,7 @@ from app.schemas.user_auth import UserResponse
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    portal_type: Optional[str] = None
 
 class RefreshRequest(BaseModel):
     refresh_token: str

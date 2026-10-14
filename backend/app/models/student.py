@@ -25,6 +25,11 @@ class Student(BaseEntity):
     batch: Mapped[str] = mapped_column(String(50), nullable=True)
     section: Mapped[str] = mapped_column(String(50), nullable=True)
 
+    # Reference Image & Face Embedding (Optional)
+    face_image_path: Mapped[str] = mapped_column(String(512), nullable=True)
+    face_embedding: Mapped[str] = mapped_column(String, nullable=True)
+    embedding_version: Mapped[str] = mapped_column(String(50), default="v1", nullable=True)
+
     # Constraint to prevent duplicates per examiner
     __table_args__ = (
         UniqueConstraint("examiner_id", "registration_number", name="uq_examiner_student_reg"),

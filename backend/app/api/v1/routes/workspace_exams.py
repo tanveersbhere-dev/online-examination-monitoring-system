@@ -28,7 +28,10 @@ async def create_draft_exam(
     service: ExamService = Depends(get_exam_service)
 ) -> Any:
     """Create a new draft exam."""
-    return await service.create_draft_exam(current_user.id, exam_in)
+    try:
+        return await service.create_draft_exam(current_user.id, exam_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.get("/", response_model=List[ExamResponse])
 async def list_exams(
@@ -57,7 +60,10 @@ async def update_exam(
     service: ExamService = Depends(get_exam_service)
 ) -> Any:
     """Update a draft exam's properties and configurations."""
-    return await service.update_domain_exam(exam_id, current_user.id, exam_in)
+    try:
+        return await service.update_domain_exam(exam_id, current_user.id, exam_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.get("/{exam_id}/students", response_model=List[int])
 async def get_assigned_students(
@@ -90,6 +96,8 @@ async def assign_supervisors(
     count = await service.assign_supervisors(exam_id, supervisor_req.supervisor_ids, current_user.id)
     return {"message": f"Successfully assigned {count} supervisors."}
 
+from app.services.exceptions import ExamNotFoundError, InvalidExamStateError
+
 @router.post("/{exam_id}/publish", response_model=ExamResponse)
 async def publish_exam(
     exam_id: int,
@@ -97,4 +105,71 @@ async def publish_exam(
     service: ExamService = Depends(get_exam_service)
 ) -> Any:
     """Publish a draft exam, transitioning it to READY state."""
-    return await service.publish_exam(exam_id, current_user.id)
+    try:
+        return await service.publish_exam(exam_id, current_user.id)
+    except ExamNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (InvalidExamStateError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/{exam_id}/attempts")
+async def get_exam_attempts(
+    exam_id: int,
+    search: str = "",
+    status_filter: str = "ALL",
+    eval_filter: str = "ALL",
+    special_filter: str = "ALL",
+    sort_by: str = "reg_num",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+    current_user: User = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Get all student attempts for a specific exam with evaluation dashboard, search, filters, sorting, and pagination."""
+    from app.services.exam_session_service import ExamSessionService
+    session_service = ExamSessionService(db)
+    try:
+        return await session_service.get_exam_attempts(
+            exam_id=exam_id,
+            search=search,
+            status_filter=status_filter,
+            eval_filter=eval_filter,
+            special_filter=special_filter,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size
+        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.get("/{exam_id}/export-results")
+async def export_exam_results(
+    exam_id: int,
+    export_format: str = "csv",
+    search: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    eval_filter: Optional[str] = None,
+    special_filter: Optional[str] = None,
+    sort_by: Optional[str] = "reg_num",
+    sort_order: Optional[str] = "asc",
+    current_user: User = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Export exam evaluation results in CSV or Excel JSON format."""
+    from app.services.exam_session_service import ExamSessionService
+    session_service = ExamSessionService(db)
+    try:
+        return await session_service.export_exam_results(
+            exam_id=exam_id,
+            export_format=export_format,
+            search=search,
+            status_filter=status_filter,
+            eval_filter=eval_filter,
+            special_filter=special_filter,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

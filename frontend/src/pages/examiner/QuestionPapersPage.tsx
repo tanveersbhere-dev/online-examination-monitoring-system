@@ -6,6 +6,7 @@ import {
   DialogContent, DialogActions, Alert, CircularProgress
 } from '@mui/material';
 import AssessmentBuilderUI from '../../components/examiner/AssessmentBuilderUI';
+import QuestionPaperReviewModal from '../../components/examiner/QuestionPaperReviewModal';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -85,6 +86,14 @@ const QuestionPapersPage = () => {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [activeBuilderPaperId, setActiveBuilderPaperId] = useState<number | null>(null);
 
+  const [reviewPaperId, setReviewPaperId] = useState<number | null>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+
+  const handleReview = (paperId: number) => {
+    setReviewPaperId(paperId);
+    setReviewModalOpen(true);
+  };
+
   const handleOpenUpload = () => {
     setUpdateMode(null);
     setTitle('');
@@ -92,6 +101,7 @@ const QuestionPapersPage = () => {
     setDescription('');
     setFile(null);
     setAuthoringMode('FILE');
+    setError(null);
     setOpenModal(true);
   };
 
@@ -101,6 +111,7 @@ const QuestionPapersPage = () => {
     setCourse(paper.course_name);
     setDescription(paper.description || '');
     setFile(null);
+    setError(null);
     // @ts-ignore
     setAuthoringMode(paper.mode || 'FILE');
     setOpenModal(true);
@@ -287,7 +298,16 @@ const QuestionPapersPage = () => {
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                           {isStructured ? (
-                            <Tooltip title="Build/Edit Questions"><Button size="small" variant="outlined" onClick={() => handleBuild(paper.id)} disabled={paper.status === 'LOCKED' || paper.status === 'ARCHIVED'}>Builder</Button></Tooltip>
+                            <>
+                              <Tooltip title="Review Paper (Read-Only)">
+                                <IconButton size="small" color="primary" onClick={() => handleReview(paper.id)}>
+                                  <VisibilityIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Build/Edit Questions">
+                                <span><Button size="small" variant="outlined" onClick={() => handleBuild(paper.id)} disabled={paper.status === 'LOCKED' || paper.status === 'ARCHIVED'}>Builder</Button></span>
+                              </Tooltip>
+                            </>
                           ) : (
                             <Tooltip title="Preview PDF"><IconButton size="small" onClick={() => handlePreview(paper.id)}><VisibilityIcon fontSize="small" /></IconButton></Tooltip>
                           )}
@@ -320,7 +340,17 @@ const QuestionPapersPage = () => {
       </Card>
 
       {/* Upload/Edit Modal */}
-      <Dialog open={openModal} onClose={() => !uploading && setOpenModal(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={openModal} 
+        onClose={() => {
+          if (!uploading) {
+            setError(null);
+            setOpenModal(false);
+          }
+        }} 
+        maxWidth="sm" 
+        fullWidth
+      >
         <DialogTitle>{updateMode ? 'Edit Assessment' : 'Create Assessment'}</DialogTitle>
         <DialogContent dividers>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -374,6 +404,13 @@ const QuestionPapersPage = () => {
       <Dialog open={builderOpen} fullScreen onClose={() => { setBuilderOpen(false); fetchPapers(); }}>
         {activeBuilderPaperId && <AssessmentBuilderUI paperId={activeBuilderPaperId} onClose={() => { setBuilderOpen(false); fetchPapers(); }} />}
       </Dialog>
+
+      {/* Read-Only Review Modal */}
+      <QuestionPaperReviewModal
+        paperId={reviewPaperId}
+        open={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
+      />
     </Box>
   );
 };

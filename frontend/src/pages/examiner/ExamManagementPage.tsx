@@ -43,12 +43,13 @@ interface QuestionPaper {
   id: number;
   title: string;
   course_name: string;
+  paper_academic_duration_minutes?: number;
+  duration_minutes?: number;
 }
 
 interface Student {
   id: number;
   full_name: string;
-  username: string;
 }
 
 const ExamManagementPage = () => {
@@ -321,23 +322,87 @@ const ExamManagementPage = () => {
             <Stack direction="row" spacing={2}>
               <TextField label="Course Name" value={createData.course_name} onChange={e => setCreateData({...createData, course_name: e.target.value})} disabled={submitting} required fullWidth />
             </Stack>
-            <TextField select label="Question Paper *" value={createData.question_paper_id} onChange={e => setCreateData({...createData, question_paper_id: e.target.value})} disabled={submitting} fullWidth>
+            <TextField select label="Question Paper *" value={createData.question_paper_id} onChange={e => {
+              const paperId = e.target.value;
+              const selectedPaper = papers.find(p => p.id === parseInt(paperId));
+              const paperDur = selectedPaper?.paper_academic_duration_minutes || selectedPaper?.duration_minutes || createData.duration_minutes || 120;
+              setCreateData({...createData, question_paper_id: paperId, duration_minutes: paperDur});
+            }} disabled={submitting} fullWidth>
               <MenuItem value="">Select Paper...</MenuItem>
               {papers.map(p => <MenuItem key={p.id} value={p.id}>{p.title} ({p.course_name})</MenuItem>)}
             </TextField>
             <TextField label="Date" type="date" InputLabelProps={{ shrink: true }} value={createData.date} onChange={e => setCreateData({...createData, date: e.target.value})} disabled={submitting} required fullWidth />
             <Stack direction="row" spacing={2}>
-              <TextField label="Start Time" type="time" InputLabelProps={{ shrink: true }} value={createData.start_time} onChange={e => setCreateData({...createData, start_time: e.target.value})} disabled={submitting} required fullWidth />
-              <TextField label="End Time" type="time" InputLabelProps={{ shrink: true }} value={createData.end_time} onChange={e => setCreateData({...createData, end_time: e.target.value})} disabled={submitting} required fullWidth />
+              <TextField label="Start Time" type="time" InputLabelProps={{ shrink: true }} value={createData.start_time} onChange={e => {
+                const newStart = e.target.value;
+                setCreateData({ ...createData, start_time: newStart });
+              }} disabled={submitting} required fullWidth />
+              <TextField label="End Time" type="time" InputLabelProps={{ shrink: true }} value={createData.end_time} onChange={e => {
+                const newEnd = e.target.value;
+                setCreateData({ ...createData, end_time: newEnd });
+              }} disabled={submitting} required fullWidth />
             </Stack>
-            <TextField label="Duration (minutes)" type="number" value={createData.duration_minutes} onChange={e => setCreateData({...createData, duration_minutes: parseInt(e.target.value)})} disabled={submitting} required fullWidth />
+            {(() => {
+              const scheduleError = (createData.date && createData.start_time && createData.end_time)
+                ? (() => {
+                    const startDate = new Date(`${createData.date}T${createData.start_time}:00`);
+                    const endDate = new Date(`${createData.date}T${createData.end_time}:00`);
+                    const now = new Date();
+                    if (startDate.getTime() < now.getTime() - 60000) return "Exam start time cannot be scheduled in the past.";
+                    if (endDate.getTime() <= startDate.getTime()) return "End time must be after the start time.";
+                    const dur = Math.floor((endDate.getTime() - startDate.getTime()) / 60000);
+                    if (dur < 10) return "Exam duration must be at least 10 minutes.";
+                    if (dur > 300) return "Exam duration cannot exceed 5 hours.";
+                    return null;
+                  })()
+                : null;
+              const calculatedDuration = (createData.date && createData.start_time && createData.end_time)
+                ? Math.floor((new Date(`${createData.date}T${createData.end_time}:00`).getTime() - new Date(`${createData.date}T${createData.start_time}:00`).getTime()) / 60000)
+                : 0;
+
+              const formatDurationHuman = (mins: number) => {
+                if (mins <= 0) return '0 minutes';
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                if (h === 0) return `${m} minute${m === 1 ? '' : 's'}`;
+                if (m === 0) return `${h} hour${h === 1 ? '' : 's'}`;
+                return `${h} hour${h === 1 ? '' : 's'} ${m} minute${m === 1 ? '' : 's'}`;
+              };
+
+              return (
+                <>
+                  {scheduleError && <Alert severity="error">{scheduleError}</Alert>}
+                  <TextField 
+                    label="Duration (Calculated Automatically)" 
+                    value={calculatedDuration > 0 ? formatDurationHuman(calculatedDuration) : 'Select date, start time, and end time'} 
+                    disabled 
+                    fullWidth 
+                    helperText="Duration is automatically computed from the start and end times (Minimum 10 minutes, Maximum 5 hours)."
+                  />
+                </>
+              );
+            })()}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenCreate(false)} disabled={submitting}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateSubmit} disabled={submitting || !createData.title || !createData.date || !createData.start_time || !createData.question_paper_id}>
-            {submitting ? 'Creating...' : 'Create Exam'}
-          </Button>
+          {(() => {
+            const isInvalid = !createData.title || !createData.date || !createData.start_time || !createData.end_time || !createData.question_paper_id || (() => {
+              const startDate = new Date(`${createData.date}T${createData.start_time}:00`);
+              const endDate = new Date(`${createData.date}T${createData.end_time}:00`);
+              const now = new Date();
+              if (startDate.getTime() < now.getTime() - 60000) return true;
+              if (endDate.getTime() <= startDate.getTime()) return true;
+              const dur = Math.floor((endDate.getTime() - startDate.getTime()) / 60000);
+              return dur < 10 || dur > 300;
+            })();
+
+            return (
+              <Button variant="contained" onClick={handleCreateSubmit} disabled={submitting || isInvalid}>
+                {submitting ? 'Creating...' : 'Create Exam'}
+              </Button>
+            );
+          })()}
         </DialogActions>
       </Dialog>
 
@@ -350,13 +415,14 @@ const ExamManagementPage = () => {
             Select students to register for this examination. Duplicate assignments will be automatically ignored by the server.
           </Typography>
           <List sx={{ width: '100%', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, maxHeight: 300, overflow: 'auto' }}>
-            {students.map((student) => {
+            {students.map((student: any) => {
               const labelId = `checkbox-list-label-${student.id}`;
+              const displayName = student.full_name || student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || `Student #${student.id}`;
+              const regNum = student.registration_number ? `(${student.registration_number})` : '';
               return (
                 <ListItem
                   key={student.id}
                   disablePadding
-                  secondaryAction={<Typography variant="caption" color="text.secondary">{student.username}</Typography>}
                 >
                   <Button
                     fullWidth
@@ -370,7 +436,7 @@ const ExamManagementPage = () => {
                       disableRipple
                       inputProps={{ 'aria-labelledby': labelId }}
                     />
-                    <ListItemText id={labelId} primary={student.full_name} />
+                    <ListItemText id={labelId} primary={`${displayName} ${regNum}`.trim()} />
                   </Button>
                 </ListItem>
               );

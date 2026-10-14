@@ -45,11 +45,13 @@ class CandidateAnswerService:
             sub_count = 1 if is_sub else 0
             updated_sub_count = sub_count
             
+            ans_status = answer_in.answer_status or ("ANSWERED" if answer_in.answer_data else "NOT_ANSWERED")
             new_ans = await self.repo.create(
                 exam_session_id=exam_session_id,
                 section_index=section_index,
                 question_index=question_index,
                 answer_data=answer_in.answer_data or {},
+                answer_status=ans_status,
                 is_submitted=is_sub,
                 submission_count=sub_count
             )

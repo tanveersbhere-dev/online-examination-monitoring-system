@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Float, DateTime
+from sqlalchemy import String, Float, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import BaseEntity
@@ -14,6 +14,8 @@ class AISession(BaseEntity):
     
     session_uuid: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid.uuid4()), unique=True, index=True, nullable=False)
     state: Mapped[str] = mapped_column(String(50), default="CREATED", nullable=False)
+    monitoring_status: Mapped[str] = mapped_column(String(50), default="ACTIVE", nullable=False)
+    frames_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     stopped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     current_risk: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)

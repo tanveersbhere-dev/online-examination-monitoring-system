@@ -45,6 +45,16 @@ const ExamsPage = () => {
     fetchExams();
   }, []);
 
+  const handleStartLive = async (examId: number) => {
+    try {
+      setError(null);
+      await apiClient.patch(`/workspace/exams/${examId}/start`);
+      fetchExams();
+    } catch (err: any) {
+      setError(getErrorMessage(err));
+    }
+  };
+
   const filteredExams = exams.filter(e => 
     e.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     e.exam_code.toLowerCase().includes(searchQuery.toLowerCase())
@@ -106,7 +116,15 @@ const ExamsPage = () => {
                         <Chip label={exam.exam_code} size="small" variant="outlined" />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight={600}>{exam.title}</Typography>
+                        <Typography 
+                          variant="body2" 
+                          fontWeight={700} 
+                          color="primary.main" 
+                          sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                          onClick={() => navigate(`/examiner/exams/details/${exam.id}`)}
+                        >
+                          {exam.title}
+                        </Typography>
                       </TableCell>
                       <TableCell>{exam.subject || 'N/A'}</TableCell>
                       <TableCell>
@@ -126,6 +144,15 @@ const ExamsPage = () => {
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Tooltip title="Open Exam Workspace & Attempts">
+                            <Button 
+                              size="small" 
+                              variant="outlined" 
+                              onClick={() => navigate(`/examiner/exams/details/${exam.id}`)}
+                            >
+                              Workspace
+                            </Button>
+                          </Tooltip>
                           {['DRAFT', 'READY'].includes(exam.status) && (
                             <Tooltip title="Edit Draft">
                               <IconButton size="small" onClick={() => navigate(`/examiner/exams/build?id=${exam.id}`)}>
@@ -135,15 +162,8 @@ const ExamsPage = () => {
                           )}
                           {exam.status === 'READY' && (
                             <Tooltip title="Start Live">
-                              <IconButton size="small" sx={{ color: 'success.main' }}>
+                              <IconButton size="small" sx={{ color: 'success.main' }} onClick={() => handleStartLive(exam.id)}>
                                 <PlayArrowIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          {exam.status === 'COMPLETED' && (
-                            <Tooltip title="View Report">
-                              <IconButton size="small" sx={{ color: 'primary.main' }}>
-                                <BarChartIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}

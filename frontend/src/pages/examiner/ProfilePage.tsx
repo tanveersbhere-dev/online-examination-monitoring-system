@@ -66,7 +66,6 @@ const ProfilePage = () => {
     setProfileMessage(null);
     try {
       const response = await apiClient.put('/auth/profile', profileData);
-      // Update local storage user details
       const token = localStorage.getItem('access_token') || '';
       const refresh = localStorage.getItem('refresh_token') || '';
       login(token, refresh, response.data);
@@ -102,7 +101,6 @@ const ProfilePage = () => {
       const token = localStorage.getItem('access_token') || '';
       const refresh = localStorage.getItem('refresh_token') || '';
       login(token, refresh, response.data);
-      
       setNewEmail('');
       setEmailOtp('');
       setIsEmailChangeRequested(false);
@@ -137,50 +135,58 @@ const ProfilePage = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 } }}>
-      <Typography variant="h4" sx={{ fontWeight: 600, mb: 4 }}>My Profile</Typography>
+    <Box>
+      {/* Page Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={800} sx={{ color: '#0F172A', letterSpacing: '-0.02em', mb: 0.5 }}>My Profile</Typography>
+        <Typography variant="body2" sx={{ color: '#64748B' }}>Manage your account settings and credentials.</Typography>
+      </Box>
 
-      <Stack spacing={4} sx={{ maxWidth: 800 }}>
+      <Stack spacing={3} sx={{ maxWidth: 740 }}>
         
         {/* Basic Info Section */}
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Basic Information</Typography>
+        <Paper elevation={0} sx={{ p: 3, border: '1px solid #F1F5F9', borderRadius: '14px' }}>
+          <Typography variant="overline" sx={{ color: '#64748B', fontSize: '0.65rem', letterSpacing: '0.08em', mb: 0.5, display: 'block' }}>Account</Typography>
+          <Typography variant="h6" fontWeight={700} sx={{ color: '#0F172A', mb: 1.5 }}>Basic Information</Typography>
           <Divider sx={{ mb: 3 }} />
           
           {profileMessage && (
             <Alert severity={profileMessage.type} sx={{ mb: 3 }}>{profileMessage.text}</Alert>
           )}
 
-          <Stack spacing={3}>
+          <Stack spacing={2.5}>
             <TextField
               label="Full Name"
               value={profileData.full_name}
               onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
-              InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" /></InputAdornment> }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><PersonIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment> }}
             />
             <TextField
               label="Phone Number"
               value={profileData.phone_number}
               onChange={(e) => setProfileData({ ...profileData, phone_number: e.target.value })}
-              InputProps={{ startAdornment: <InputAdornment position="start"><PhoneIcon fontSize="small" /></InputAdornment> }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><PhoneIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment> }}
             />
-            <Button 
-              variant="contained" 
-              onClick={handleProfileUpdate} 
+            <Button
+              variant="contained"
+              onClick={handleProfileUpdate}
               disabled={isUpdatingProfile}
-              sx={{ width: 'fit-content' }}
+              startIcon={isUpdatingProfile ? <CircularProgress size={16} color="inherit" /> : null}
+              sx={{ width: 'fit-content', px: 3 }}
             >
-              {isUpdatingProfile ? <CircularProgress size={24} /> : 'Save Changes'}
+              {isUpdatingProfile ? 'Saving…' : 'Save Changes'}
             </Button>
           </Stack>
         </Paper>
 
         {/* Email Address Section */}
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Email Address</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Current Email: <strong>{user?.email}</strong>
-          </Typography>
+        <Paper elevation={0} sx={{ p: 3, border: '1px solid #F1F5F9', borderRadius: '14px' }}>
+          <Typography variant="overline" sx={{ color: '#64748B', fontSize: '0.65rem', letterSpacing: '0.08em', mb: 0.5, display: 'block' }}>Security</Typography>
+          <Typography variant="h6" fontWeight={700} sx={{ color: '#0F172A', mb: 0.75 }}>Email Address</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, px: 1.5, py: 0.5, borderRadius: '8px', backgroundColor: '#EFF6FF', mb: 1.5 }}>
+            <EmailIcon sx={{ fontSize: 14, color: '#2563EB' }} />
+            <Typography variant="caption" sx={{ color: '#2563EB', fontWeight: 600 }}>{user?.email}</Typography>
+          </Box>
           <Divider sx={{ mb: 3 }} />
 
           {emailMessage && (
@@ -194,9 +200,9 @@ const ProfilePage = () => {
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 sx={{ flexGrow: 1 }}
-                InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon fontSize="small" /></InputAdornment> }}
+                InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment> }}
               />
-              <Button variant="outlined" onClick={handleEmailRequest} disabled={!newEmail || isEmailLoading}>
+              <Button variant="outlined" onClick={handleEmailRequest} disabled={!newEmail || isEmailLoading} sx={{ flexShrink: 0 }}>
                 Request Change
               </Button>
             </Stack>
@@ -208,29 +214,30 @@ const ProfilePage = () => {
                 onChange={(e) => setEmailOtp(e.target.value)}
                 sx={{ flexGrow: 1 }}
               />
-              <Button variant="contained" onClick={handleEmailVerify} disabled={!emailOtp || isEmailLoading}>
-                Verify & Update Email
+              <Button variant="contained" onClick={handleEmailVerify} disabled={!emailOtp || isEmailLoading} sx={{ flexShrink: 0 }}>
+                Verify & Update
               </Button>
             </Stack>
           )}
         </Paper>
 
         {/* Change Password Section */}
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Change Password</Typography>
+        <Paper elevation={0} sx={{ p: 3, border: '1px solid #F1F5F9', borderRadius: '14px' }}>
+          <Typography variant="overline" sx={{ color: '#64748B', fontSize: '0.65rem', letterSpacing: '0.08em', mb: 0.5, display: 'block' }}>Security</Typography>
+          <Typography variant="h6" fontWeight={700} sx={{ color: '#0F172A', mb: 1.5 }}>Change Password</Typography>
           <Divider sx={{ mb: 3 }} />
 
           {passwordMessage && (
             <Alert severity={passwordMessage.type} sx={{ mb: 3 }}>{passwordMessage.text}</Alert>
           )}
 
-          <Stack spacing={3}>
+          <Stack spacing={2.5}>
             <TextField
               label="Current Password"
               type={showPassword ? 'text' : 'password'}
               value={passwordData.current_password}
               onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
-              InputProps={{ startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" /></InputAdornment> }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment> }}
             />
             <TextField
               label="New Password"
@@ -238,10 +245,10 @@ const ProfilePage = () => {
               value={passwordData.new_password}
               onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
               InputProps={{
-                startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" /></InputAdornment>,
+                startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment>,
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" sx={{ color: '#94A3B8' }}>
                       {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                     </IconButton>
                   </InputAdornment>
@@ -253,15 +260,16 @@ const ProfilePage = () => {
               type={showPassword ? 'text' : 'password'}
               value={passwordData.confirm_password}
               onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
-              InputProps={{ startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" /></InputAdornment> }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" sx={{ color: '#94A3B8' }} /></InputAdornment> }}
             />
-            <Button 
-              variant="contained" 
-              onClick={handlePasswordChange} 
+            <Button
+              variant="contained"
+              onClick={handlePasswordChange}
               disabled={isPasswordLoading}
-              sx={{ width: 'fit-content' }}
+              startIcon={isPasswordLoading ? <CircularProgress size={16} color="inherit" /> : null}
+              sx={{ width: 'fit-content', px: 3 }}
             >
-              {isPasswordLoading ? <CircularProgress size={24} /> : 'Update Password'}
+              {isPasswordLoading ? 'Updating…' : 'Update Password'}
             </Button>
           </Stack>
         </Paper>

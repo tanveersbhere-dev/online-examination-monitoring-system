@@ -27,9 +27,12 @@ import StudentRegistrationPage from '../pages/examiner/StudentRegistrationPage';
 import QuestionPapersPage from '../pages/examiner/QuestionPapersPage';
 import ExamsPage from '../pages/examiner/ExamsPage';
 import ExamBuilderPage from '../pages/examiner/ExamBuilderPage';
+import ExamDetailsWorkspacePage from '../pages/examiner/ExamDetailsWorkspacePage';
 import LiveMonitoringPage from '../pages/examiner/LiveMonitoringPage';
+import MonitoringListPage from '../pages/examiner/MonitoringListPage';
 import MonitoringReportsPage from '../pages/examiner/MonitoringReportsPage';
 import StatisticsPage from '../pages/examiner/StatisticsPage';
+import AttemptReviewPage from '../pages/examiner/AttemptReviewPage';
 import ProfilePage from '../pages/examiner/ProfilePage';
 import SupervisorsPage from '../pages/examiner/SupervisorsPage';
 import SettingsPage from '../pages/examiner/SettingsPage';
@@ -105,8 +108,12 @@ const router = createBrowserRouter([
           { path: 'question-papers', element: <QuestionPapersPage /> },
           { path: 'exams', element: <ExamsPage /> },
           { path: 'exams/build', element: <ExamBuilderPage /> },
-          { path: 'monitoring', element: <LiveMonitoringPage /> },
+          { path: 'exams/details/:examId', element: <ExamDetailsWorkspacePage /> },
+          { path: 'monitoring', element: <MonitoringListPage /> },
+          { path: 'monitoring/:sessionId', element: <LiveMonitoringPage /> },
+          { path: 'live-monitoring/:sessionId', element: <LiveMonitoringPage /> },
           { path: 'reports', element: <MonitoringReportsPage /> },
+          { path: 'attempts/:sessionId/review', element: <AttemptReviewPage /> },
           { path: 'statistics', element: <StatisticsPage /> },
           { path: 'profile', element: <ProfilePage /> },
           { path: 'supervisors', element: <SupervisorsPage /> },

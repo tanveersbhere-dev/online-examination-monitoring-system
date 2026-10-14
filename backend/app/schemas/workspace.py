@@ -58,7 +58,7 @@ class UpcomingExam(BaseModel):
     id: int
     name: str
     course: str
-    scheduled_date: datetime
+    scheduled_date: Optional[datetime] = None
     students_count: int
 
 class DashboardSummaryResponse(BaseModel):

@@ -47,13 +47,13 @@ apiClient.interceptors.response.use(
           // Refresh failed (e.g. refresh token expired)
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = window.location.pathname.startsWith('/examiner') ? '/examiner/login' : '/student/login';
+          sessionStorage.removeItem('access_token');
           return Promise.reject(refreshError);
         }
       } else {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = window.location.pathname.startsWith('/examiner') ? '/examiner/login' : '/student/login';
+        sessionStorage.removeItem('access_token');
       }
     }
     return Promise.reject(error);

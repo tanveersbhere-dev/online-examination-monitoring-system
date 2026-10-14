@@ -19,7 +19,6 @@ class StudentResponse(BaseModel):
     full_name: str
     father_name: Optional[str]
     email: str
-    username: str
     credential_expiry_date: Optional[datetime]
     account_status: str
     is_active: bool

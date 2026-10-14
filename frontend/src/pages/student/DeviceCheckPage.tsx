@@ -45,6 +45,7 @@ const DeviceCheckPage = () => {
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(window.location.search);
   const examId = searchParams.get('exam_id');
+  const skipIdentity = searchParams.get('skip_identity') === 'true';
   const [checks, setChecks] = useState<Check[]>(INITIAL_CHECKS);
   const [currentCheckIndex, setCurrentCheckIndex] = useState(-1);
   const [allDone, setAllDone] = useState(false);
@@ -171,11 +172,11 @@ const DeviceCheckPage = () => {
           <Button
             variant="contained"
             disabled={!allPassed}
-            onClick={() => navigate(`/student/identity?exam_id=${examId}`)}
+            onClick={() => navigate(skipIdentity ? `/student/exam?exam_id=${examId}` : `/student/identity?exam_id=${examId}`)}
             endIcon={<ArrowForwardIcon />}
             sx={{ minWidth: 200 }}
           >
-            Continue to Identity Verification
+            {skipIdentity ? 'Continue to Examination' : 'Continue to Identity Verification'}
           </Button>
         )}
       </Box>

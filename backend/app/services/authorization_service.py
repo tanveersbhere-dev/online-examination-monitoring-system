@@ -10,6 +10,8 @@ class AuthorizationService:
     
     @staticmethod
     def require_role(user: UserResponse, allowed_roles: List[str]) -> None:
-        if not user.role or user.role.name not in allowed_roles:
-            logger.warning(f"Unauthorized access attempt by user {user.id}. Required one of {allowed_roles}, got {user.role.name if user.role else 'None'}")
-            raise AuthorizationError(f"User lacks required role to access this resource.")
+        user_role = user.role.name.upper() if (user and user.role and user.role.name) else None
+        allowed_upper = [r.upper() for r in allowed_roles]
+        if not user_role or user_role not in allowed_upper:
+            logger.warning(f"Unauthorized access attempt by user {user.id if user else 'None'}. Required one of {allowed_roles}, got {user.role.name if user and user.role else 'None'}")
+            raise AuthorizationError("User lacks required role to access this resource.")

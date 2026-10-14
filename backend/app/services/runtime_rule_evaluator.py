@@ -27,39 +27,42 @@ class RuntimeRuleEvaluator:
         if state.current_section_index == target_section_index and state.current_question_index == target_question_index:
             return True
 
-        # Find section rule
-        section_rule = next((r for r in exam.section_rules if r.section_index == state.current_section_index), None)
-        target_section_rule = next((r for r in exam.section_rules if r.section_index == target_section_index), None)
+        # Find section rules from exam or cloned question paper
+        rules_source = exam.section_rules if exam.section_rules else (exam.question_paper.section_rules if exam.question_paper else [])
+        section_rule = next((r for r in rules_source if r.section_index == state.current_section_index), None)
+        target_section_rule = next((r for r in rules_source if r.section_index == target_section_index), None)
         
         # Cross-section navigation checks
         if state.current_section_index != target_section_index:
-            if section_rule and section_rule.require_completion_before_next:
-                # We would need to check if all questions in section are submitted.
-                # For now, we trust CandidateAnswer logic or assume lock arrays.
-                if state.current_section_index not in state.completed_sections:
-                    raise ValueError(f"Must complete section {state.current_section_index} before navigating away.")
+            # Check target section lock
+            if target_section_index in (state.locked_sections or []):
+                sec_title = target_section_rule.section_name if target_section_rule else f"Section {target_section_index + 1}"
+                raise ValueError(f"'{sec_title}' has already been completed and is locked.")
+
+            # Going forward: check if current section requires completion
+            if target_section_index > state.current_section_index:
+                if section_rule and (section_rule.require_completion_before_next or getattr(exam, 'global_navigation', 'FREE') == 'SEQUENTIAL'):
+                    if state.current_section_index not in (state.completed_sections or []):
+                        sec_title = section_rule.section_name if section_rule else f"Section {state.current_section_index + 1}"
+                        raise ValueError(f"You must complete and submit '{sec_title}' before proceeding to the next session.")
             
             # Going backward across sections
             if target_section_index < state.current_section_index:
-                # Based on exam.global_navigation
-                if exam.global_navigation == "SEQUENTIAL":
-                    raise ValueError("Exam enforces sequential section navigation. Cannot return to previous sections.")
+                if getattr(exam, 'global_navigation', 'FREE') == "SEQUENTIAL" or (section_rule and not section_rule.allow_return_to_previous):
+                    raise ValueError("Returning to previous sections or sessions is not permitted for this examination.")
         
         # Intra-section navigation checks
         if section_rule and section_rule.navigation_policy == "SEQUENTIAL":
             if target_question_index < state.current_question_index:
                 if not section_rule.allow_return_to_previous:
-                    raise ValueError("Sequential navigation enforced. Cannot return to previous questions in this section.")
+                    raise ValueError("Sequential question policy is enforced. You cannot return to previous questions in this section.")
                     
             if target_question_index > state.current_question_index + 1:
-                raise ValueError("Sequential navigation enforced. Cannot skip questions.")
+                raise ValueError("Sequential question policy is enforced. You cannot skip questions.")
 
-        # Finally, check if the target is locked
-        if target_section_index in state.locked_sections:
-            raise ValueError(f"Section {target_section_index} is locked.")
-            
-        if target_question_index in state.locked_questions:
-            raise ValueError(f"Question {target_question_index} is locked.")
+        # Check question lock
+        if target_question_index in (state.locked_questions or []):
+            raise ValueError(f"Question {target_question_index + 1} is locked.")
 
         return True
 

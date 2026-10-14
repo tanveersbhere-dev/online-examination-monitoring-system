@@ -42,7 +42,7 @@ async def get_question_papers(
     current_user: UserResponse = Depends(get_current_user)  # Anyone authenticated can view list
 ):
     service = QuestionPaperService(db)
-    return await service.get_papers(skip, limit, course_name)
+    return await service.get_papers(skip, limit, course_name, current_user)
 
 @router.get("/{paper_id}", response_model=QuestionPaperResponse)
 async def get_question_paper(
@@ -52,7 +52,11 @@ async def get_question_paper(
 ):
     service = QuestionPaperService(db)
     try:
-        return await service.get_paper(paper_id)
+        paper = await service.get_paper(paper_id)
+        role_name = current_user.role.name.upper() if current_user.role else ""
+        if role_name == "EXAMINER" and paper.uploaded_by != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this question paper.")
+        return paper
     except QuestionPaperNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -66,6 +70,23 @@ async def download_question_paper(
     service = QuestionPaperService(db)
     try:
         paper = await service.get_paper(paper_id)
+        role_name = current_user.role.name.upper() if current_user.role else ""
+        if role_name == "EXAMINER" and paper.uploaded_by != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this question paper.")
+        elif role_name == "STUDENT":
+            from sqlalchemy import select
+            from app.models.exam import Exam
+            from app.models.exam_assignment import ExamAssignment
+            assign_res = await db.execute(
+                select(ExamAssignment)
+                .join(Exam, Exam.id == ExamAssignment.exam_id)
+                .filter(ExamAssignment.student_id == current_user.id, Exam.question_paper_id == paper.id)
+            )
+            if not assign_res.scalars().first():
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not assigned to an exam for this question paper.")
+        elif role_name not in ["ADMIN", "EXAMINER", "STUDENT"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized role.")
+
         if not os.path.exists(paper.file_path):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File physically missing on server.")
         
@@ -174,6 +195,22 @@ async def archive_question_paper(
     service = QuestionPaperService(db)
     try:
         return await service.archive_paper(paper_id, current_user)
+    except QuestionPaperNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{paper_id}/duplicate", response_model=QuestionPaperResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_question_paper(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = RequireManager
+):
+    service = QuestionPaperService(db)
+    try:
+        return await service.duplicate_paper(paper_id, current_user)
     except QuestionPaperNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorizationError as e:

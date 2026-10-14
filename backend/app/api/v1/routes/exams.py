@@ -32,7 +32,7 @@ async def create_exam(
     except ScheduleConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.get("", response_model=List[ExamResponse])
 async def get_exams(
@@ -45,7 +45,7 @@ async def get_exams(
 ):
     """List all exams. Requires valid authentication."""
     service = ExamService(db)
-    return await service.get_all_exams(skip=skip, limit=limit, course_name=course_name, status=status)
+    return await service.get_all_exams(skip=skip, limit=limit, course_name=course_name, status=status, current_user=current_user)
 
 @router.get("/upcoming", response_model=List[ExamResponse])
 async def get_upcoming_exams(

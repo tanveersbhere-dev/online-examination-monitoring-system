@@ -4,11 +4,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import BaseEntity
 
+from .question_option import QuestionOption
+
 if TYPE_CHECKING:
     from .exam import Exam
     from .exam_section_rule import ExamSectionRule
     from .question_paper import QuestionPaper
-    from .question_option import QuestionOption
 
 class ExamQuestionRule(BaseEntity):
     __tablename__ = "exam_question_rules"
@@ -50,4 +51,4 @@ class ExamQuestionRule(BaseEntity):
     exam: Mapped["Exam"] = relationship("Exam", back_populates="question_rules")
     question_paper: Mapped["QuestionPaper"] = relationship("QuestionPaper", back_populates="question_rules")
     section_rule: Mapped["ExamSectionRule"] = relationship("ExamSectionRule", back_populates="question_rules")
-    options: Mapped[List["QuestionOption"]] = relationship("QuestionOption", back_populates="question_rule", cascade="all, delete-orphan")
+    options: Mapped[List["QuestionOption"]] = relationship("QuestionOption", back_populates="question_rule", collection_class=list, cascade="all, delete-orphan")

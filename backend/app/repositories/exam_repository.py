@@ -20,9 +20,13 @@ class ExamRepository(BaseRepository[Exam]):
         """Returns a base query with explicit eager loading to prevent MissingGreenlet exceptions."""
         from app.models.exam_section_rule import ExamSectionRule
         from app.models.exam_question_rule import ExamQuestionRule
-        from sqlalchemy.orm import joinedload, selectinload
+        from app.models.question_paper import QuestionPaper
+        from sqlalchemy.orm import selectinload
         return select(Exam).options(
-            joinedload(Exam.question_paper),
+            selectinload(Exam.question_paper)
+            .selectinload(QuestionPaper.section_rules)
+            .selectinload(ExamSectionRule.question_rules)
+            .selectinload(ExamQuestionRule.options),
             selectinload(Exam.section_rules)
             .selectinload(ExamSectionRule.question_rules)
             .selectinload(ExamQuestionRule.options)
@@ -41,7 +45,8 @@ class ExamRepository(BaseRepository[Exam]):
         skip: int = 0, 
         limit: int = 100, 
         course_name: Optional[str] = None, 
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        creator_id: Optional[int] = None
     ) -> List[Exam]:
         try:
             query = self._base_query()
@@ -50,6 +55,8 @@ class ExamRepository(BaseRepository[Exam]):
                 query = query.filter(Exam.course_name.ilike(f"%{course_name}%"))
             if status:
                 query = query.filter(Exam.status == status)
+            if creator_id is not None:
+                query = query.filter(Exam.created_by == creator_id)
                 
             query = query.offset(skip).limit(limit)
             result = await self.db.execute(query)

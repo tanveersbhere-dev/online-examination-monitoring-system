@@ -34,6 +34,8 @@ class StudentRepoUpdate(BaseModel):
 class StudentRepoResponse(StudentRepoBase):
     id: int
     uuid: str
+    face_image_path: Optional[str] = None
+    has_face_image: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -51,6 +53,7 @@ class StudentImportRow(BaseModel):
     semester: Optional[int] = None
     batch: Optional[str] = None
     section: Optional[str] = None
+    photo_filename: Optional[str] = None
 
 class ImportConflict(BaseModel):
     row_index: int

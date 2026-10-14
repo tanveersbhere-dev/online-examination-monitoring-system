@@ -7,7 +7,7 @@ class QuestionPaperResponse(BaseModel):
     title: str
     course_name: str
     uploaded_by: int
-    file_path: str
+    file_path: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -22,6 +22,17 @@ class ExamCreate(BaseModel):
     scheduled_end: datetime
     duration_minutes: int = Field(..., gt=0)
 
+    @validator('title', pre=True, always=True)
+    def validate_title(cls, v):
+        if v is not None:
+            if not isinstance(v, str):
+                raise ValueError("Title must be a string.")
+            v_str = v.strip()
+            if not v_str:
+                raise ValueError("Title cannot be empty or whitespace only.")
+            return v_str
+        return v
+
     @validator('scheduled_end')
     def check_end_after_start(cls, v, values):
         if 'scheduled_start' in values and v <= values['scheduled_start']:
@@ -34,6 +45,17 @@ class ExamUpdate(BaseModel):
     scheduled_end: Optional[datetime] = None
     duration_minutes: Optional[int] = Field(None, gt=0)
 
+    @validator('title', pre=True)
+    def validate_title(cls, v):
+        if v is not None:
+            if not isinstance(v, str):
+                raise ValueError("Title must be a string.")
+            v_str = v.strip()
+            if not v_str:
+                raise ValueError("Title cannot be empty or whitespace only.")
+            return v_str
+        return v
+
 class AssignStudentsRequest(BaseModel):
     student_ids: List[int]
 
@@ -42,7 +64,7 @@ from app.schemas.runtime_rules import SectionRuleResponse
 class ExamResponse(BaseModel):
     id: int
     title: str
-    course_name: str
+    course_name: Optional[str] = ""
     status: str
     scheduled_start: datetime
     scheduled_end: datetime
@@ -64,8 +86,16 @@ class ExamResponse(BaseModel):
     show_question_numbers: bool = True
     show_marks: bool = True
     
-    # Level 2 & 3 Rules
-    section_rules: List[SectionRuleResponse] = []
+    # Evaluation & Session Metadata (Student History View)
+    session_id: Optional[int] = None
+    session_status: Optional[str] = None
+    evaluation_status: Optional[str] = None
+    total_score: Optional[float] = None
+    objective_score: Optional[float] = None
+    subjective_score: Optional[float] = None
+    total_marks: Optional[int] = 100
+    passing_marks: Optional[int] = 50
+    evaluated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

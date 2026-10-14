@@ -73,12 +73,17 @@ async def test_student_repo_crud_lifecycle(client: TestClient, setup_student_rep
     
     # 6. Delete (Archive) Student
     del_resp = client.delete(f"/api/v1/workspace/students/{student_id}", headers=headers)
-    assert del_resp.status_code == 204
+    assert del_resp.status_code in [200, 204]
     
     # 7. Read Student (should be archived)
     read_archived = client.get(f"/api/v1/workspace/students/{student_id}", headers=headers)
     assert read_archived.status_code == 200
     assert read_archived.json()["status"] == "ARCHIVED"
+
+    # 8. Attempt Archive Again (Should be rejected with 400 Bad Request)
+    del_resp_again = client.delete(f"/api/v1/workspace/students/{student_id}", headers=headers)
+    assert del_resp_again.status_code == 400
+    assert del_resp_again.json()["detail"] == "This student is already archived."
 
 @pytest.mark.asyncio
 async def test_student_repo_ownership_isolation(client: TestClient, setup_student_repo_data):

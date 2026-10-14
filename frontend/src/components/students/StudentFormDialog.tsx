@@ -24,6 +24,7 @@ export default function StudentFormDialog({ open, onClose, onSubmit, initialData
     batch: ''
   });
   
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function StudentFormDialog({ open, onClose, onSubmit, initialData
         registration_number: '', full_name: '', email: '', phone: '',
         status: 'ACTIVE', department: '', program: '', semester: '', batch: ''
       });
+      setPhotoFile(null);
     }
   }, [initialData, open]);
 
@@ -50,12 +52,12 @@ export default function StudentFormDialog({ open, onClose, onSubmit, initialData
     try {
       await onSubmit({
         ...formData,
-        semester: formData.semester ? parseInt(formData.semester) : null
+        semester: formData.semester ? parseInt(formData.semester) : null,
+        photoFile
       });
       onClose();
     } catch (err) {
       console.error(err);
-      // Let parent handle errors usually, or show inline
     } finally {
       setLoading(false);
     }
@@ -104,6 +106,16 @@ export default function StudentFormDialog({ open, onClose, onSubmit, initialData
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField fullWidth label="Semester" name="semester" type="number" value={formData.semester} onChange={handleChange} />
+          </Grid>
+
+          <Grid item xs={12} sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" color="primary">Reference Image (Optional for Face Verification)</Typography>
+          </Grid>
+          <Grid item xs={12}>
+            <Button variant="outlined" component="label" fullWidth>
+              {photoFile ? `Selected: ${photoFile.name}` : 'Upload Reference Photo (Optional)'}
+              <input type="file" hidden accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+            </Button>
           </Grid>
         </Grid>
       </DialogContent>

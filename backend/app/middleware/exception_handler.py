@@ -23,3 +23,21 @@ def setup_exception_handlers(app: FastAPI) -> None:
             status_code=400,
             content={"detail": str(exc)}
         )
+
+    from app.services.exceptions import InvalidExamStateError, ExamNotFoundError
+
+    @app.exception_handler(InvalidExamStateError)
+    async def invalid_exam_state_handler(request: Request, exc: InvalidExamStateError):
+        logger.warning(f"Invalid exam state transition: {str(exc)}")
+        return JSONResponse(
+            status_code=400,
+            content={"detail": str(exc)}
+        )
+
+    @app.exception_handler(ExamNotFoundError)
+    async def exam_not_found_handler(request: Request, exc: ExamNotFoundError):
+        logger.warning(f"Exam not found: {str(exc)}")
+        return JSONResponse(
+            status_code=404,
+            content={"detail": str(exc)}
+        )

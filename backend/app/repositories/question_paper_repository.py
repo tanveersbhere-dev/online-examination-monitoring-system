@@ -29,21 +29,23 @@ class QuestionPaperRepository(BaseRepository[QuestionPaper]):
             logger.error(f"Error fetching QuestionPaper by id {id}: {e}")
             raise DatabaseOperationError("Failed to fetch question paper by id.") from e
 
-    async def get_by_course(self, course_name: str, skip: int = 0, limit: int = 100) -> List[QuestionPaper]:
+    async def get_by_course(self, course_name: str, skip: int = 0, limit: int = 100, uploaded_by: Optional[int] = None) -> List[QuestionPaper]:
         try:
-            result = await self.db.execute(
-                self._base_query().filter(QuestionPaper.course_name.ilike(f"%{course_name}%")).offset(skip).limit(limit)
-            )
+            query = self._base_query().filter(QuestionPaper.course_name.ilike(f"%{course_name}%"))
+            if uploaded_by is not None:
+                query = query.filter(QuestionPaper.uploaded_by == uploaded_by)
+            result = await self.db.execute(query.offset(skip).limit(limit))
             return list(result.scalars().all())
         except SQLAlchemyError as e:
             logger.error(f"Error fetching Question Papers by course {course_name}: {e}")
             raise DatabaseOperationError("Failed to fetch question papers by course.") from e
 
-    async def get_all_papers(self, skip: int = 0, limit: int = 100) -> List[QuestionPaper]:
+    async def get_all_papers(self, skip: int = 0, limit: int = 100, uploaded_by: Optional[int] = None) -> List[QuestionPaper]:
         try:
-            result = await self.db.execute(
-                self._base_query().offset(skip).limit(limit)
-            )
+            query = self._base_query()
+            if uploaded_by is not None:
+                query = query.filter(QuestionPaper.uploaded_by == uploaded_by)
+            result = await self.db.execute(query.offset(skip).limit(limit))
             return list(result.scalars().all())
         except SQLAlchemyError as e:
             logger.error(f"Error fetching all Question Papers: {e}")

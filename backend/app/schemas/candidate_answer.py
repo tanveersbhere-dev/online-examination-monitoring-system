@@ -6,13 +6,17 @@ class CandidateAnswerBase(BaseModel):
     section_index: int
     question_index: int
     answer_data: Dict[str, Any] = Field(default_factory=dict)
+    answer_status: str = "NOT_ANSWERED"
     is_submitted: bool = False
+    awarded_marks: Optional[float] = None
+    examiner_comments: Optional[str] = None
 
 class CandidateAnswerCreate(CandidateAnswerBase):
     pass
 
 class CandidateAnswerUpdate(BaseModel):
     answer_data: Optional[Dict[str, Any]] = None
+    answer_status: Optional[str] = None
     is_submitted: Optional[bool] = None
 
 class CandidateAnswerResponse(CandidateAnswerBase):

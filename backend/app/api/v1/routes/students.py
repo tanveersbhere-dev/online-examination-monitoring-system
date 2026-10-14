@@ -10,6 +10,7 @@ from app.security.permissions import RequireExaminer
 from app.security.dependencies import get_current_user
 from app.schemas.user_auth import UserResponse
 from app.schemas.student import StudentCreate, StudentUpdate, StudentResponse
+from app.schemas.exam import ExamResponse
 from app.services.student_service import StudentService
 from app.services.exceptions import StudentRegistrationError, DuplicateStudentError, InvalidExamError, EmailDeliveryError
 
@@ -48,7 +49,7 @@ async def register_student(
     except StudentRegistrationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@router.get("/me/exams", response_model=List[dict])
+@router.get("/me/exams", response_model=List[ExamResponse])
 async def get_my_exams(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)

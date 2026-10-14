@@ -45,7 +45,7 @@ class User(BaseEntity):
     role: Mapped["Role"] = relationship("Role", back_populates="users")
     exams_created: Mapped[List["Exam"]] = relationship("Exam", back_populates="creator", cascade="all, delete-orphan")
     papers_uploaded: Mapped[List["QuestionPaper"]] = relationship("QuestionPaper", back_populates="uploader", cascade="all, delete-orphan")
-    exam_sessions: Mapped[List["ExamSession"]] = relationship("ExamSession", back_populates="student", cascade="all, delete-orphan")
+    exam_sessions: Mapped[List["ExamSession"]] = relationship("ExamSession", back_populates="student", cascade="all, delete-orphan", foreign_keys="[ExamSession.student_id]")
     otps: Mapped[List["OTP"]] = relationship("OTP", back_populates="user", cascade="all, delete-orphan")
     activities: Mapped[List["Activity"]] = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
     notifications: Mapped[List["Notification"]] = relationship("Notification", back_populates="user", cascade="all, delete-orphan")

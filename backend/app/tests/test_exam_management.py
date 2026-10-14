@@ -30,16 +30,20 @@ class MockUploadFile(UploadFile):
 @pytest_asyncio.fixture(scope="function")
 async def setup_users(db_session: AsyncSession):
     role_repo = RoleRepository(db_session)
-    examiner_role = await role_repo.create(name="EXAMINER")
+    examiner_role = await role_repo.get_by_name("EXAMINER")
+    if not examiner_role:
+        examiner_role = await role_repo.create(name="EXAMINER")
     
     user_repo = UserRepository(db_session)
-    examiner = await user_repo.create(
-        role_id=examiner_role.id,
-        full_name="Exam Admin",
-        email="admin@exams.com",
-        password_hash="hash",
-        is_active=True
-    )
+    examiner = await user_repo.get_by_email("admin@exams.com")
+    if not examiner:
+        examiner = await user_repo.create(
+            role_id=examiner_role.id,
+            full_name="Exam Admin",
+            email="admin@exams.com",
+            password_hash="hash",
+            is_active=True
+        )
     return examiner
 
 @pytest.mark.asyncio
@@ -143,7 +147,8 @@ async def test_exam_state_transitions_and_ai_hooks(db_session: AsyncSession, set
     mock_file = MockUploadFile("final.pdf", b"pdf content")
     paper = await qp_service.create_paper("CS102 Final", "CS102", mock_file, examiner_resp)
     
-    now = datetime.now()
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
     exam = await ex_service.create_exam(examiner.id, ExamCreate(
         title="Final Exam",
         course_name="CS102",
@@ -158,23 +163,24 @@ async def test_exam_state_transitions_and_ai_hooks(db_session: AsyncSession, set
     exam = await ex_service._change_status(exam.id, "READY")
     
     # Start Exam (Triggers AI Session Manager)
-    exam = await ex_service.start_exam(exam.id, student_id=1)
+    exam = await ex_service.start_exam(exam.id, examiner.id)
     assert exam.status == "RUNNING"
     assert exam.ai_session_status == "ACTIVE"
     
     # Pause Exam
-    exam = await ex_service.pause_exam(exam.id)
+    exam = await ex_service.pause_exam(exam.id, examiner.id)
     assert exam.status == "PAUSED"
     assert exam.ai_session_status == "ACTIVE"
     
     # Resume Exam
-    exam = await ex_service.resume_exam(exam.id)
+    exam = await ex_service.resume_exam(exam.id, examiner.id)
     assert exam.status == "RUNNING"
     
     # Complete Exam
-    exam = await ex_service.complete_exam(exam.id)
+    exam = await ex_service.complete_exam(exam.id, examiner.id)
     assert exam.status == "COMPLETED"
     assert exam.ai_session_status == "INACTIVE"
     
-    # Cleanup
+    # Cleanup exam and paper
+    await ex_service.delete_exam(exam.id, examiner.id)
     await qp_service.delete_paper(paper.id, examiner_resp)

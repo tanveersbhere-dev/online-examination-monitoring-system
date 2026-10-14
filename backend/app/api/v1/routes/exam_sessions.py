@@ -44,6 +44,78 @@ async def list_exam_sessions(
     service = ExamSessionService(db)
     return await service.get_all_sessions(skip=skip, limit=limit, exam_id=exam_id, student_id=student_id, status=session_status)
 
+@router.get("/{session_id}/review")
+async def get_attempt_review(
+    session_id: int,
+    current_user: UserResponse = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Read-only attempt review endpoint for Examiners.
+    Retrieves full attempt summary, paper definition with correct answers, 
+    candidate submitted answers, runtime state history, session metadata, 
+    and timeline events.
+    """
+    service = ExamSessionService(db)
+    try:
+        return await service.get_attempt_review_data(session_id)
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+class EvaluationItemRequest(BaseModel):
+    section_index: int
+    question_index: int
+    awarded_marks: Optional[float] = None
+    examiner_comments: Optional[str] = ""
+
+class EvaluationSaveRequest(BaseModel):
+    evaluations: List[EvaluationItemRequest] = []
+    finalize: Optional[bool] = False
+
+@router.post("/{session_id}/evaluate")
+async def save_attempt_evaluation(
+    session_id: int,
+    req: EvaluationSaveRequest,
+    current_user: UserResponse = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+):
+    """Save draft evaluation or update subjective question scores for an attempt."""
+    service = ExamSessionService(db)
+    try:
+        evals_list = [e.model_dump() for e in req.evaluations]
+        return await service.save_evaluation(
+            session_id=session_id,
+            evaluations_list=evals_list,
+            finalize=bool(req.finalize),
+            examiner_id=current_user.id
+        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{session_id}/finalize-evaluation")
+async def finalize_attempt_evaluation(
+    session_id: int,
+    req: Optional[EvaluationSaveRequest] = None,
+    current_user: UserResponse = RequireExaminer,
+    db: AsyncSession = Depends(get_db)
+):
+    """Finalize evaluation for an attempt, locking it against future changes."""
+    service = ExamSessionService(db)
+    try:
+        evals_list = [e.model_dump() for e in (req.evaluations if req and req.evaluations else [])]
+        return await service.save_evaluation(
+            session_id=session_id,
+            evaluations_list=evals_list,
+            finalize=True,
+            examiner_id=current_user.id
+        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.get("/{session_id}", response_model=ExamSessionResponse)
 async def get_exam_session(
     session_id: int,

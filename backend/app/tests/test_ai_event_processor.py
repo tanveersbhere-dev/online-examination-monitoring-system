@@ -12,8 +12,10 @@ from app.models.exam import Exam
 from app.models.question_paper import QuestionPaper
 from app.models.exam_session import ExamSession
 from app.models.violation import Violation
+from app.models.evidence import Evidence
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 @pytest_asyncio.fixture(scope="function")
 async def setup_ai_data(db_session: AsyncSession):
@@ -59,8 +61,8 @@ async def setup_ai_data(db_session: AsyncSession):
     session_repo = ExamSessionRepository(db_session)
     exam_session = await session_repo.create(exam_id=exam.id, student_id=student.id, status="RUNNING")
     
-    # Clear Cooldowns
-    AIEventProcessor._cooldowns.clear()
+    # Clear tracking times
+    AIEventProcessor._last_event_times.clear()
 
     return exam_session
 
@@ -73,11 +75,12 @@ async def test_ai_event_processing(setup_ai_data, db_session: AsyncSession, monk
     monkeypatch.setattr("app.services.ai_event_processor.async_session_factory", mock_session_factory)
     
     exam_session = setup_ai_data
+    base_t = time.time()
     
     # 1. Process Low Confidence Event (should NOT create violation)
     low_conf_event = AIEventDTO(
         event_type="NO_FACE",
-        timestamp=time.time(),
+        timestamp=base_t,
         exam_session_id=exam_session.id,
         severity="HIGH",
         source_module="face_detector",
@@ -92,31 +95,42 @@ async def test_ai_event_processing(setup_ai_data, db_session: AsyncSession, monk
     # 2. Process High Confidence Event (should create violation)
     high_conf_event = AIEventDTO(
         event_type="NO_FACE",
-        timestamp=time.time(),
+        timestamp=base_t + 1.0,
         exam_session_id=exam_session.id,
         severity="HIGH",
         source_module="face_detector",
         confidence=0.9,  # above 0.5 threshold
-        payload={}
+        payload={"frame_path": "uploads/evidence_1.jpg"}
     )
     await AIEventProcessor.process_event(high_conf_event)
     
-    result = await db_session.execute(select(Violation).where(Violation.exam_session_id == exam_session.id))
+    result = await db_session.execute(
+        select(Violation).options(selectinload(Violation.evidence)).where(Violation.exam_session_id == exam_session.id)
+    )
     violations = result.scalars().all()
     assert len(violations) == 1
     assert violations[0].violation_type == "NO_FACE"
+    assert violations[0].duration_seconds == 0.0
+    assert len(violations[0].evidence) == 1
+    assert violations[0].evidence[0].is_primary is True
 
-    # 3. Process Duplicate Event within Cooldown (should be suppressed)
-    dup_event = AIEventDTO(
+    # 3. Process Ongoing Event within episode (should deduplicate and increase duration)
+    cont_event = AIEventDTO(
         event_type="NO_FACE",
-        timestamp=time.time() + 1.0, # Within 5s cooldown
+        timestamp=base_t + 4.5,
         exam_session_id=exam_session.id,
         severity="HIGH",
         source_module="face_detector",
-        confidence=0.9,
-        payload={}
+        confidence=0.95,
+        payload={"frame_path": "uploads/evidence_2.jpg"}
     )
-    await AIEventProcessor.process_event(dup_event)
+    await AIEventProcessor.process_event(cont_event)
     
-    result = await db_session.execute(select(Violation).where(Violation.exam_session_id == exam_session.id))
-    assert len(result.scalars().all()) == 1  # Still 1
+    result = await db_session.execute(
+        select(Violation).options(selectinload(Violation.evidence)).where(Violation.exam_session_id == exam_session.id)
+    )
+    violations = result.scalars().all()
+    assert len(violations) == 1  # Deduplicated into 1 violation
+    assert violations[0].duration_seconds > 0.0
+    assert len(violations[0].evidence) == 2
+    assert violations[0].evidence[1].is_primary is False

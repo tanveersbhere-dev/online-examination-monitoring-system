@@ -1,361 +1,308 @@
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { WebSocketClient } from '../../services/wsClient';
-import { getErrorMessage } from '../../utils/errorHandler';
 import {
-  Box, Typography, Grid, Card, CardContent, Chip, LinearProgress,
-  Divider, Stack, Button, List, ListItem, ListItemText, Paper,
+  Box, Typography, Button, Stack, IconButton, Chip, Dialog,
+  DialogTitle, DialogContent, DialogActions, DialogContentText,
+  CircularProgress, Card, CardContent, Grid, Paper, Divider, Alert
 } from '@mui/material';
-import VideocamIcon from '@mui/icons-material/Videocam';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import ShieldIcon from '@mui/icons-material/Shield';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
-import WifiIcon from '@mui/icons-material/Wifi';
-import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
-import FaceIcon from '@mui/icons-material/Face';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import ShieldIcon from '@mui/icons-material/Shield';
+import PersonIcon from '@mui/icons-material/Person';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
-interface ViolationEvent {
-  type: string;
-  time: string;
-  severity: string;
+interface StudentMetadata {
+  name: string;
+  email: string;
+  regNo: string;
+  studentId: number;
+  examTitle: string;
+  examId: number;
+  sessionStatus: string;
 }
 
-interface TimelineEvent {
-  icon: string;
-  text: string;
-  time: string;
-}
-
-const LiveMonitoringPage = () => {
+const LiveMonitoringPage: React.FC = () => {
+  const { sessionId } = useParams<{ sessionId?: string }>();
   const [searchParams] = useSearchParams();
-  const examId = searchParams.get('exam_id') || '1';
+  const navigate = useNavigate();
 
-  const [riskScore, setRiskScore] = useState(0);
-  const [identityStatus, setIdentityStatus] = useState('VERIFIED');
-  const [identityConfidence, setIdentityConfidence] = useState(100);
-  const [facesCount, setFacesCount] = useState(1);
-  const [violations, setViolations] = useState<ViolationEvent[]>([]);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([
-    { icon: '▶️', text: 'Exam session started', time: new Date().toLocaleTimeString() }
-  ]);
-  const [detectedObjects, setDetectedObjects] = useState<{name: string, conf: number}[]>([]);
-  
-  const wsRef = useRef<WebSocketClient | null>(null);
+  const activeSessionId = sessionId || searchParams.get('session_id') || searchParams.get('exam_id') || '1';
+
+  const [studentInfo, setStudentInfo] = useState<StudentMetadata | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [liveFrameBase64, setLiveFrameBase64] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean>(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [riskScore, setRiskScore] = useState<number>(0);
+
+  // Actions Dialog
+  const [actionDialog, setActionDialog] = useState<'pause' | 'resume' | 'end' | null>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // Attempt to load current status first
-    const fetchStatus = async () => {
+    let isMounted = true;
+    const fetchMetadata = async () => {
+      setLoading(true);
       try {
-        const res = await apiClient.get(`/monitoring/current?exam_session_id=${examId}`);
-        if (res.data) {
-          setRiskScore(res.data.current_risk_score || 0);
-          
-          if (res.data.active_violations) {
-            setViolations(res.data.active_violations.map((v: any) => ({
-              type: v.violation_type,
-              time: new Date(v.timestamp).toLocaleTimeString(),
-              severity: v.severity.toLowerCase()
-            })));
-          }
-          
-          if (res.data.timeline_events && res.data.timeline_events.length > 0) {
-            const mappedTimeline = res.data.timeline_events.map((e: any) => {
-              let icon = 'ℹ️';
-              if (e.severity === 'CRITICAL' || e.severity === 'HIGH') icon = '🔴';
-              else if (e.event_type.includes('FACE')) icon = '👀';
-              else if (e.event_type.includes('OBJECT') || e.event_type.includes('PHONE')) icon = '📱';
-              
-              return {
-                icon,
-                text: e.description || e.event_type,
-                time: new Date(e.timestamp).toLocaleTimeString()
-              };
-            });
-            // append initial start
-            setTimeline([...mappedTimeline, { icon: '▶️', text: 'Exam session started', time: new Date().toLocaleTimeString() }]);
+        const reviewRes = await apiClient.get(`/exam-sessions/${activeSessionId}/review`);
+        if (reviewRes.data?.summary && isMounted) {
+          const s = reviewRes.data.summary;
+          setStudentInfo({
+            name: s.student_name || 'Candidate',
+            email: s.student_email || '',
+            regNo: s.registration_number || `ID: #${s.student_id}`,
+            studentId: s.student_id,
+            examTitle: s.exam_title || 'Examination Session',
+            examId: s.exam_id,
+            sessionStatus: s.status || 'RUNNING'
+          });
+        }
+      } catch (err) {
+        console.warn('Session metadata load error:', err);
+      }
+
+      try {
+        const currentRes = await apiClient.get(`/monitoring/current?exam_session_id=${activeSessionId}`);
+        if (currentRes.data && isMounted) {
+          setRiskScore(currentRes.data.current_risk_score || 0);
+          if (Array.isArray(currentRes.data.timeline_events)) {
+            setEvents(currentRes.data.timeline_events);
           }
         }
-      } catch (err: any) {
-        console.error("Could not fetch initial status", getErrorMessage(err));
+      } catch (err) {
+        console.warn('Monitoring current status load error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
-    
-    fetchStatus();
 
-    // Connect WebSocket
-    const ws = new WebSocketClient(parseInt(examId));
-    wsRef.current = ws;
+    fetchMetadata();
+    return () => { isMounted = false; };
+  }, [activeSessionId]);
 
-    ws.onMessage((data) => {
-      try {
-        const timeStr = new Date().toLocaleTimeString();
-        
-        // Always add to timeline if it's an event
-        if (data.event) {
-            let icon = 'ℹ️';
-            let text = data.payload?.description || data.event;
-            
-            if (data.payload?.severity === 'CRITICAL' || data.payload?.severity === 'HIGH') icon = '🔴';
-            else if (data.event.includes('FACE')) icon = '👀';
-            else if (data.event.includes('OBJECT')) icon = '📱';
-            
-            setTimeline(prev => [{ icon, text, time: timeStr }, ...prev].slice(0, 50));
-        }
+  useEffect(() => {
+    const ws = new WebSocketClient(parseInt(activeSessionId));
 
-        // Specific event handling
-        switch (data.event) {
-          case 'RISK_UPDATED':
-            setRiskScore(data.payload.data?.risk_score || 0);
-            break;
-            
-          case 'VIOLATION_CREATED':
-            setViolations(prev => [{
-              type: data.payload.description,
-              time: timeStr,
-              severity: data.payload.severity.toLowerCase()
-            }, ...prev]);
-            break;
-            
-          case 'FACE_STATUS_CHANGED':
-            const faceData = data.payload.data;
-            if (faceData) {
-              setFacesCount(faceData.face_count !== undefined ? faceData.face_count : facesCount);
-              if (faceData.identity_verified !== undefined) {
-                setIdentityStatus(faceData.identity_verified ? 'VERIFIED' : 'MISMATCH DETECTED');
-                setIdentityConfidence(faceData.confidence || 0);
-              }
-            }
-            break;
-            
-          case 'OBJECT_STATUS_CHANGED':
-             const objData = data.payload.data;
-             if (objData && objData.objects) {
-                 setDetectedObjects(objData.objects.map((o: any) => ({ name: o.label, conf: o.confidence })));
-             }
-             break;
-        }
-      } catch (e) {
-        console.error("WS Parse Error", e);
+    ws.onMessage((data: any) => {
+      setConnected(true);
+      if (data.event === 'MONITORING_FRAME' && data.payload?.image_base64) {
+        const rawB64 = data.payload.image_base64;
+        const imgSrc = rawB64.startsWith('data:') ? rawB64 : `data:image/jpeg;base64,${rawB64}`;
+        setLiveFrameBase64(imgSrc);
+      }
+
+      if (data.event === 'VIOLATION_CREATED' || data.event === 'VIOLATION_UPDATED') {
+        const payload = data.payload || {};
+        setEvents(prev => [
+          {
+            event_type: payload.violation_type || 'VIOLATION',
+            severity: payload.severity || 'HIGH',
+            description: payload.description || 'Violation detected',
+            timestamp: new Date().toISOString()
+          },
+          ...prev.slice(0, 49)
+        ]);
       }
     });
 
-    ws.connect();
-
     return () => {
-      if (wsRef.current) wsRef.current.disconnect();
+      ws.disconnect();
     };
-  }, [examId, facesCount]);
+  }, [activeSessionId]);
 
-  const riskLabel = riskScore > 75 ? 'CRITICAL' : riskScore > 50 ? 'HIGH' : riskScore > 25 ? 'MEDIUM' : 'LOW';
-  const riskColor = riskScore > 75 ? '#B00020' : riskScore > 50 ? '#E65100' : riskScore > 25 ? '#F57C00' : '#2E7D32';
+  const handleProctorAction = async (action: 'pause' | 'resume' | 'end') => {
+    setActionLoading(true);
+    try {
+      if (action === 'pause') {
+        await apiClient.post(`/runtime/suspend`, { exam_id: studentInfo?.examId || 1, reason: 'Proctor Paused' });
+      } else if (action === 'resume') {
+        await apiClient.post(`/runtime/resume`, { exam_id: studentInfo?.examId || 1 });
+      } else if (action === 'end') {
+        await apiClient.post(`/runtime/submit`, null, { params: { exam_id: studentInfo?.examId || 1 } });
+      }
+      setActionDialog(null);
+    } catch (err) {
+      console.error('Proctor action failed:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Box>
-      {/* Page Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" fontWeight={600}>Live Monitoring</Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <FiberManualRecordIcon sx={{ fontSize: 10, color: 'success.main' }} />
-            <Typography variant="body2" color="success.main" fontWeight={600}>Live</Typography>
-          </Box>
-          <Chip label={`Exam Session — ${examId}`} variant="outlined" size="small" />
+    <Box sx={{ pb: 6 }}>
+      {/* Header Bar */}
+      <Card elevation={1} sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <IconButton onClick={() => navigate(-1)} sx={{ border: '1px solid #cbd5e1' }}>
+              <ArrowBackIcon />
+            </IconButton>
+            <Box>
+              <Typography variant="h5" fontWeight={700} color="primary.main">
+                Live Monitoring: {studentInfo?.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {studentInfo?.examTitle} · {studentInfo?.regNo}
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Chip
+              icon={<FiberManualRecordIcon style={{ color: connected ? '#22c55e' : '#f59e0b', fontSize: 12 }} />}
+              label={connected ? 'Stream Active' : 'Connecting...'}
+              size="small"
+              variant="outlined"
+            />
+            <Button
+              variant="outlined"
+              color="warning"
+              size="small"
+              startIcon={<PauseIcon />}
+              onClick={() => setActionDialog('pause')}
+            >
+              Pause Session
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              startIcon={<StopIcon />}
+              onClick={() => setActionDialog('end')}
+            >
+              Terminate
+            </Button>
+          </Stack>
         </Box>
-      </Box>
+      </Card>
 
       <Grid container spacing={3}>
-        {/* LEFT — Camera Feed */}
-        <Grid item xs={12} md={4}>
-          <Stack spacing={2}>
-            {/* Camera */}
-            <Card elevation={1}>
-              <CardContent sx={{ p: 0, pb: '0 !important' }}>
-                <Box
-                  sx={{
-                    width: '100%', aspectRatio: '4/3',
-                    backgroundColor: '#0A0A0A', position: 'relative',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: '12px 12px 0 0',
-                  }}
-                >
-                  <VideocamIcon sx={{ fontSize: 60, color: 'rgba(255,255,255,0.1)' }} />
-                  {/* Face bbox simulation based on face count */}
-                  {facesCount > 0 && <Box sx={{ position: 'absolute', width: 140, height: 180, border: '2px solid #F44336', borderRadius: 2 }} />}
-                  {/* Recording dot */}
-                  <Box sx={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <FiberManualRecordIcon sx={{ color: '#F44336', fontSize: 10 }} />
-                    <Typography variant="caption" sx={{ color: 'white', fontSize: '0.65rem' }}>REC</Typography>
-                  </Box>
-                  {/* Face count */}
-                  <Chip label={`${facesCount} Face(s)`} size="small" sx={{ position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.65rem' }} />
-                  {/* Identity confidence bar */}
-                  <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                    <Box sx={{ width: `${Math.min(100, identityConfidence * 100)}%`, height: '100%', backgroundColor: identityStatus === 'VERIFIED' ? '#2E7D32' : '#F44336' }} />
-                  </Box>
+        {/* Left Column: Live Feed / Placeholder */}
+        <Grid item xs={12} md={7}>
+          <Card elevation={1} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ bgcolor: '#0f172a', height: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+              {liveFrameBase64 ? (
+                <img
+                  src={liveFrameBase64}
+                  alt="Candidate Live Feed"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              ) : (
+                <Box sx={{ textAlign: 'center', color: '#94a3b8', p: 4 }}>
+                  <VideocamIcon sx={{ fontSize: 64, mb: 1, opacity: 0.6 }} />
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Live Camera Stream
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    Independent Monitoring Unit Integration Boundary
+                  </Typography>
                 </Box>
-                <Box sx={{ p: 2, display: 'flex', gap: 2 }}>
-                  <Button variant="outlined" color="warning" size="small" startIcon={<PauseIcon />} fullWidth>
-                    Pause Exam
-                  </Button>
-                  <Button variant="outlined" color="error" size="small" startIcon={<StopIcon />} fullWidth>
-                    End Exam
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
+              )}
+            </Box>
+            <CardContent sx={{ p: 2.5 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Candidate</Typography>
+                  <Typography variant="body2" fontWeight={700}>{studentInfo?.name}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Status</Typography>
+                  <Typography variant="body2" fontWeight={700}>{studentInfo?.sessionStatus}</Typography>
+                </Grid>
+                <Grid item xs={6} sm={4}>
+                  <Typography variant="caption" color="text.secondary">Risk Score</Typography>
+                  <Typography variant="body2" fontWeight={700} color={riskScore > 50 ? 'error.main' : 'success.main'}>
+                    {riskScore} / 100
+                  </Typography>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
 
-            {/* Session Info */}
-            <Card elevation={1}>
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>Session Info</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Stack spacing={0.75}>
-                  {[
-                    { label: 'Student ID', value: `Active Session ${examId}` },
-                    { label: 'Exam', value: `ID: ${examId}` },
-                    { label: 'Status', value: 'Running' },
-                  ].map((r) => (
-                    <Box key={r.label} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="text.secondary">{r.label}</Typography>
-                      <Typography variant="caption" fontWeight={600}>{r.value}</Typography>
-                    </Box>
+        {/* Right Column: Recent Events & Proctor Controls */}
+        <Grid item xs={12} md={5}>
+          <Card elevation={1} sx={{ borderRadius: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ p: 3, flexGrow: 1 }}>
+              <Typography variant="h6" fontWeight={700} color="primary.main" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TimelineIcon fontSize="small" /> Real-Time Telemetry & Events
+              </Typography>
+              <Divider sx={{ my: 1.5 }} />
+
+              {events.length === 0 ? (
+                <Box sx={{ py: 6, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No active events or violations recorded for this session.
+                  </Typography>
+                </Box>
+              ) : (
+                <Stack spacing={1.5} sx={{ maxHeight: 420, overflowY: 'auto' }}>
+                  {events.map((evt, idx) => (
+                    <Paper key={idx} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="caption" fontWeight={700} color="text.primary">
+                          {evt.event_type || 'EVENT'}
+                        </Typography>
+                        <Chip
+                          label={evt.severity || 'INFO'}
+                          size="small"
+                          color={evt.severity === 'CRITICAL' ? 'error' : evt.severity === 'HIGH' ? 'warning' : 'default'}
+                          sx={{ fontSize: '0.65rem', height: 20 }}
+                        />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {evt.description || 'System event'}
+                      </Typography>
+                    </Paper>
                   ))}
                 </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Grid>
-
-        {/* CENTRE — Monitoring Status */}
-        <Grid item xs={12} md={4}>
-          <Stack spacing={2}>
-            {/* Risk Score */}
-            <Card elevation={1}>
-              <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>Current Risk Score</Typography>
-                <Box sx={{ my: 2 }}>
-                  <Typography variant="h1" fontWeight={700} sx={{ color: riskColor, fontSize: '4rem' }}>
-                    {Math.round(riskScore)}
-                  </Typography>
-                  <Typography variant="h6" fontWeight={700} sx={{ color: riskColor }}>
-                    {riskLabel} RISK
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(100, riskScore)}
-                  sx={{
-                    height: 8, borderRadius: 4,
-                    backgroundColor: '#ECEFF1',
-                    '& .MuiLinearProgress-bar': { backgroundColor: riskColor },
-                  }}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Identity Status */}
-            <Card elevation={1} sx={{ borderLeft: `4px solid ${identityStatus === 'VERIFIED' ? '#2E7D32' : '#B00020'}` }}>
-              <CardContent sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <ShieldIcon sx={{ color: identityStatus === 'VERIFIED' ? 'success.main' : 'error.main', fontSize: 32 }} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Identity Status</Typography>
-                    <Typography variant="subtitle1" fontWeight={700} color={identityStatus === 'VERIFIED' ? 'success.main' : 'error.main'}>{identityStatus}</Typography>
-                    <Typography variant="caption" color="text.secondary">Confidence: {(identityConfidence * 100).toFixed(1)}%</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* Violations */}
-            <Card elevation={1}>
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-                  Violations ({violations.length})
-                </Typography>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
-                  {violations.map((v, idx) => (
-                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.75, borderLeft: '3px solid', borderLeftColor: v.severity === 'critical' ? 'error.main' : v.severity === 'high' ? 'warning.main' : 'divider', pl: 1, mb: 0.5 }}>
-                      <Typography variant="body2">{v.type}</Typography>
-                      <Typography variant="caption" color="text.secondary">{v.time}</Typography>
-                    </Box>
-                  ))}
-                  {violations.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 1, textAlign: 'center' }}>No violations recorded</Typography>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* Detected Objects */}
-            <Card elevation={1}>
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>Detected Objects</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {detectedObjects.length > 0 ? detectedObjects.map((obj, i) => (
-                    <Chip key={i} icon={obj.name.toLowerCase().includes('phone') ? <PhoneAndroidIcon /> : <PersonOutlineIcon />} label={`${obj.name} (${(obj.conf*100).toFixed(0)}%)`} size="small" sx={{ backgroundColor: obj.name.toLowerCase().includes('phone') ? '#FFEBEE' : '#E3F2FD', color: obj.name.toLowerCase().includes('phone') ? '#B00020' : '#1565C0' }} />
-                  )) : (
-                    <Typography variant="body2" color="text.secondary">No notable objects detected</Typography>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Grid>
-
-        {/* RIGHT — Timeline */}
-        <Grid item xs={12} md={4}>
-          <Card elevation={1} sx={{ height: '100%' }}>
-            <CardContent sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-                  Live Timeline
-                </Typography>
-                <Chip label="● Live" size="small" sx={{ backgroundColor: '#E8F5E9', color: '#2E7D32', fontSize: '0.65rem', height: 20 }} />
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                <List disablePadding>
-                  {timeline.map((event, idx) => (
-                    <ListItem key={idx} disablePadding sx={{ py: 1, alignItems: 'flex-start' }}>
-                      <Box sx={{ mr: 1.5, fontSize: '1rem', mt: 0.25 }}>{event.icon}</Box>
-                      <ListItemText
-                        primary={<Typography variant="body2">{event.text}</Typography>}
-                        secondary={<Typography variant="caption" color="text.secondary">{event.time}</Typography>}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-
-              <Divider sx={{ mt: 2, mb: 2 }} />
-              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1, mb: 1.5, display: 'block' }}>
-                Critical Alerts
-              </Typography>
-              {violations.filter(v => v.severity === 'critical' || v.severity === 'high').map((v, i) => (
-                <Paper key={i} sx={{ p: 1.5, backgroundColor: '#FFEBEE', borderRadius: 2, mb: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WarningAmberIcon sx={{ color: 'error.main', fontSize: 18 }} />
-                    <Typography variant="caption" color="error.main" fontWeight={600}>
-                      {v.type}
-                    </Typography>
-                  </Box>
-                </Paper>
-              ))}
-              {violations.filter(v => v.severity === 'critical' || v.severity === 'high').length === 0 && (
-                <Typography variant="caption" color="text.secondary">No critical alerts</Typography>
               )}
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      {/* Action Dialog */}
+      <Dialog open={Boolean(actionDialog)} onClose={() => !actionLoading && setActionDialog(null)}>
+        <DialogTitle fontWeight={700}>
+          {actionDialog === 'pause' ? 'Pause Examination' : actionDialog === 'resume' ? 'Resume Examination' : 'Terminate Examination'}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {actionDialog === 'pause'
+              ? 'Pausing will temporarily halt candidate progression.'
+              : actionDialog === 'resume'
+              ? 'Resumes the candidate exam session.'
+              : 'Terminating will immediately conclude the session.'}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setActionDialog(null)} disabled={actionLoading}>Cancel</Button>
+          <Button
+            onClick={() => actionDialog && handleProctorAction(actionDialog)}
+            variant="contained"
+            color={actionDialog === 'end' ? 'error' : 'warning'}
+            disabled={actionLoading}
+          >
+            {actionLoading ? <CircularProgress size={20} color="inherit" /> : 'Confirm'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

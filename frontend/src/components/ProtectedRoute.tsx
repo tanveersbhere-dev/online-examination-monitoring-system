@@ -27,8 +27,9 @@ const ProtectedRoute = ({ allowedRoles, redirectPath }: ProtectedRouteProps) => 
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role.name)) {
-    // If authenticated but wrong role, send to root which will redirect appropriately
-    return <Navigate to="/" replace />;
+    // If authenticated but attempting to access a different portal, redirect to that portal's login page
+    const isExaminer = location.pathname.startsWith('/examiner');
+    return <Navigate to={redirectPath || (isExaminer ? '/examiner/login' : '/student/login')} replace state={{ from: location }} />;
   }
 
   return <Outlet />;

@@ -52,9 +52,6 @@ async def setup_registration_data(db_session: AsyncSession):
     return examiner, exam
 
 def test_credential_generation():
-    username = CredentialService.generate_username()
-    assert username.startswith("STU-")
-    
     password = CredentialService.generate_password(12)
     assert len(password) == 12
     assert any(c.islower() for c in password)
@@ -89,7 +86,7 @@ async def test_student_registration_workflow(client: TestClient, setup_registrat
         "face_image": ("dummy.jpg", valid_jpeg, "image/jpeg")
     }
     
-    with patch("app.services.student_service.EmbeddingIdentityProcessor._extract_embedding", return_value=[0.1] * 512):
+    with patch("app.monitoring_integration.face_embedding_service.FaceEmbeddingService.extract_embedding", return_value=[0.1] * 512):
         resp = client.post("/api/v1/students/register", data=req_payload, files=files, headers={"Authorization": f"Bearer {token}"})
         
     if resp.status_code != 201:
@@ -99,14 +96,12 @@ async def test_student_registration_workflow(client: TestClient, setup_registrat
     data = resp.json()
     assert data["full_name"] == "Jane Doe"
     assert data["email"] == "jane@student.com"
-    assert "username" in data
-    assert data["username"].startswith("STU-")
     assert data["account_status"] == "ACTIVE"
     
     student_id = data["id"]
     
     # Attempt Duplicate Email
-    with patch("ai_engine.features.face_identity.embedding_processor.EmbeddingIdentityProcessor._extract_embedding", return_value=[0.1] * 512):
+    with patch("app.monitoring_integration.face_embedding_service.FaceEmbeddingService.extract_embedding", return_value=[0.1] * 512):
         resp_dup = client.post("/api/v1/students/register", data=req_payload, files=files, headers={"Authorization": f"Bearer {token}"})
     assert resp_dup.status_code == 409
     

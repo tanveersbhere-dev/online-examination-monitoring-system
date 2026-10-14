@@ -16,7 +16,7 @@ class RoleRepository(BaseRepository[Role]):
 
     async def get_by_name(self, name: str) -> Optional[Role]:
         try:
-            result = await self.db.execute(select(Role).filter(Role.name == name))
+            result = await self.db.execute(select(Role).filter(Role.name.ilike(name)))
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
             logger.error(f"Error fetching Role by name {name}: {e}")

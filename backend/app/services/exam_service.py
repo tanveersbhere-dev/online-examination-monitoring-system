@@ -10,18 +10,18 @@ from app.models.exam_session import ExamSession
 from app.core.config import settings
 from app.models.exam import Exam
 from app.repositories.exam_repository import ExamRepository
+from app.repositories.role_repository import RoleRepository
 from app.repositories.question_paper_repository import QuestionPaperRepository
 from app.repositories.exceptions import EntityNotFoundError
 from app.models.exam_assignment import ExamAssignment
 from app.models.exam_supervisor import ExamSupervisor
+from app.models.exam_section_rule import ExamSectionRule
 from app.models.student import Student
-from app.services.ai_session_manager import AISessionManager
 from app.services.exceptions import (
     ExamNotFoundError, 
     InvalidExamStateError, 
     ScheduleConflictError, 
-    QuestionPaperError,
-    AISessionError
+    QuestionPaperError
 )
 from app.schemas.exam import ExamCreate, ExamUpdate as OldExamUpdate, ExamResponse as OldExamResponse, QuestionPaperResponse
 from app.schemas.exam_domain import ExamCreate as DomainExamCreate, ExamUpdate as DomainExamUpdate, ExamResponse as DomainExamResponse
@@ -37,6 +37,43 @@ class ExamService:
         self.exam_repo = ExamRepository(db)
         self.paper_repo = QuestionPaperRepository(db)
         
+from datetime import datetime, timezone, timedelta
+
+def validate_schedule_rules(scheduled_start: Optional[datetime], scheduled_end: Optional[datetime]) -> int:
+    if not scheduled_start or not scheduled_end:
+        raise ValueError("Scheduled start time and end time are required.")
+
+    now = datetime.now(timezone.utc)
+    start_dt = scheduled_start if scheduled_start.tzinfo else scheduled_start.replace(tzinfo=timezone.utc)
+    end_dt = scheduled_end if scheduled_end.tzinfo else scheduled_end.replace(tzinfo=timezone.utc)
+
+    # 1. Start time validation (allowing 1 minute tolerance for network/clock drift)
+    if start_dt < now - timedelta(minutes=1):
+        raise ValueError("Exam start time cannot be scheduled in the past.")
+
+    # 2. End time validation
+    if end_dt <= start_dt:
+        raise ValueError("End time must be after the start time.")
+
+    # 3. Calculated duration
+    duration_minutes = int((end_dt - start_dt).total_seconds() / 60)
+
+    # 4. Minimum duration validation
+    if duration_minutes < 10:
+        raise ValueError("Exam duration must be at least 10 minutes.")
+
+    # 5. Maximum duration validation (5 hours / 300 minutes)
+    if duration_minutes > 300:
+        raise ValueError("Exam duration cannot exceed 5 hours.")
+
+    return duration_minutes
+
+
+class ExamService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.exam_repo = ExamRepository(db)
+        self.paper_repo = QuestionPaperRepository(db)
         if not os.path.exists(settings.UPLOAD_DIR):
             os.makedirs(settings.UPLOAD_DIR)
 
@@ -45,9 +82,23 @@ class ExamService:
     # --- EXAM LIFECYCLE MANAGEMENT (LEGACY) ---
 
     async def create_exam(self, creator_id: int, exam_in: ExamCreate) -> OldExamResponse:
+        data = exam_in.model_dump()
+        self._validate_exam_business_rules(data, is_update=False)
+
         paper = await self.paper_repo.get_by_id(exam_in.question_paper_id)
         if not paper:
             raise QuestionPaperError(f"Question Paper {exam_in.question_paper_id} does not exist.")
+
+        duration = validate_schedule_rules(exam_in.scheduled_start, exam_in.scheduled_end)
+
+        # Academic Paper Duration Validation
+        sec_res = await self.db.execute(select(ExamSectionRule).where(ExamSectionRule.question_paper_id == paper.id))
+        sections_list = sec_res.scalars().all()
+        paper_duration = 0
+        if sections_list:
+            paper_duration = sum(s.section_duration_minutes for s in sections_list if s.section_duration_minutes and s.section_duration_minutes > 0)
+        if paper_duration > 0 and duration < paper_duration:
+            raise ValueError(f"Scheduled exam runtime ({duration} mins) cannot be less than the required paper academic duration ({paper_duration} mins).")
 
         await self._check_schedule_conflict(
             course_name=exam_in.course_name,
@@ -55,13 +106,15 @@ class ExamService:
             end=exam_in.scheduled_end
         )
 
+        exam_duration = exam_in.duration_minutes if (getattr(exam_in, 'duration_minutes', None) and getattr(exam_in, 'duration_minutes', None) <= duration) else duration
+
         exam = await self.exam_repo.create(
             title=exam_in.title,
             course_name=exam_in.course_name,
             question_paper_id=exam_in.question_paper_id,
             scheduled_start=exam_in.scheduled_start,
             scheduled_end=exam_in.scheduled_end,
-            duration_minutes=exam_in.duration_minutes,
+            duration_minutes=exam_duration,
             created_by=creator_id,
             status="DRAFT"
         )
@@ -84,11 +137,23 @@ class ExamService:
         if conflicts:
             raise ScheduleConflictError(f"Exam scheduling conflicts with existing exam(s) for course {course_name}.")
 
+    async def _check_and_auto_activate(self, exam: Exam) -> Exam:
+        if not exam:
+            return exam
+        try:
+            from app.services.exam_lifecycle_service import ExamLifecycleService
+            lifecycle_service = ExamLifecycleService(self.db)
+            return await lifecycle_service.sync_exam_lifecycle(exam.id)
+        except Exception as e:
+            logger.warning(f"Lifecycle sync warning for exam {exam.id}: {e}")
+            return exam
+
     async def get_exam(self, exam_id: int) -> OldExamResponse:
         try:
             exam = await self.exam_repo.get_by_id(exam_id)
             if not exam:
                 raise ExamNotFoundError(f"Exam {exam_id} not found.")
+            exam = await self._check_and_auto_activate(exam)
             resp = OldExamResponse.model_validate(exam)
             
             # Get assigned students count
@@ -105,9 +170,23 @@ class ExamService:
         skip: int = 0, 
         limit: int = 100, 
         course_name: Optional[str] = None, 
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        current_user: Optional[UserResponse] = None
     ) -> List[OldExamResponse]:
-        exams = await self.exam_repo.get_all(skip=skip, limit=limit, course_name=course_name, status=status)
+        creator_id = None
+        if current_user and current_user.role and current_user.role.name != "Admin":
+            creator_id = current_user.id
+            
+        exams = await self.exam_repo.get_all(
+            skip=skip, limit=limit, course_name=course_name, status=status, creator_id=creator_id
+        )
+        
+        # Auto activate ready exams whose scheduled start has passed
+        active_exams = []
+        for e in exams:
+            e_active = await self._check_and_auto_activate(e)
+            active_exams.append(e_active)
+        exams = active_exams
         
         # Get assigned students counts
         counts = await self.db.execute(select(ExamSession.exam_id, func.count(ExamSession.id)).group_by(ExamSession.exam_id))
@@ -151,8 +230,8 @@ class ExamService:
         new_end = update_data.get('scheduled_end', exam.scheduled_end)
         
         if 'scheduled_start' in update_data or 'scheduled_end' in update_data:
-            if new_end <= new_start:
-                raise ValueError("scheduled_end must be after scheduled_start")
+            duration = validate_schedule_rules(new_start, new_end)
+            update_data['duration_minutes'] = duration
             await self._check_schedule_conflict(
                 course_name=exam.course_name,
                 start=new_start,
@@ -180,23 +259,54 @@ class ExamService:
         if not exam:
             raise ExamNotFoundError(f"Exam {exam_id} not found.")
             
-        # Get existing sessions to avoid duplicates
-        existing_sessions_result = await self.db.execute(select(ExamSession.student_id).where(ExamSession.exam_id == exam_id))
-        existing_student_ids = set(existing_sessions_result.scalars().all())
-        
-        new_student_ids = [sid for sid in student_ids if sid not in existing_student_ids]
-        
-        for sid in new_student_ids:
-            new_session = ExamSession(exam_id=exam_id, student_id=sid)
-            self.db.add(new_session)
-            
-        await self.db.commit()
-        return len(new_student_ids)
+        return await self.assign_repository_students(exam_id, student_ids, exam.created_by)
 
     # --- MODULE 4 EXAM DOMAIN LIFECYCLE (DRAFT WORKFLOW) ---
 
+    def _validate_exam_business_rules(self, data: dict, is_update: bool = False, existing_exam = None):
+        title = data.get('title')
+        if not is_update or 'title' in data:
+            if title is not None:
+                if not isinstance(title, str) or not title.strip():
+                    raise ValueError("Exam title cannot be empty or whitespace only.")
+
+        semester = data.get('semester')
+        if semester is not None:
+            if isinstance(semester, bool) or not isinstance(semester, int) or semester < 1 or semester > 8:
+                raise ValueError("Semester must be an integer between 1 and 8.")
+
+        tot_marks = data.get('total_marks')
+        if is_update and tot_marks is None and existing_exam:
+            tot_marks = existing_exam.total_marks
+        if tot_marks is not None:
+            if isinstance(tot_marks, bool) or not isinstance(tot_marks, int) or tot_marks <= 0:
+                raise ValueError("Total marks must be a positive integer greater than 0.")
+
+        pass_marks = data.get('passing_marks')
+        if is_update and pass_marks is None and existing_exam:
+            pass_marks = existing_exam.passing_marks
+        if pass_marks is not None:
+            if isinstance(pass_marks, bool) or not isinstance(pass_marks, int) or pass_marks < 0:
+                raise ValueError("Passing marks must be a non-negative integer greater than or equal to 0.")
+
+        if tot_marks is not None and pass_marks is not None:
+            if pass_marks > tot_marks:
+                raise ValueError(f"Passing marks ({pass_marks}) cannot exceed total marks ({tot_marks}).")
+
+        duration = data.get('duration_minutes')
+        if duration is not None:
+            if isinstance(duration, bool) or not isinstance(duration, int) or duration <= 0:
+                raise ValueError("Exam duration must be a positive integer greater than 0.")
+
     async def create_draft_exam(self, creator_id: int, exam_in: DomainExamCreate) -> DomainExamResponse:
         data = exam_in.model_dump()
+        self._validate_exam_business_rules(data, is_update=False)
+
+        if data.get('scheduled_start') and data.get('scheduled_end'):
+            sched_dur = validate_schedule_rules(data['scheduled_start'], data['scheduled_end'])
+            if not data.get('duration_minutes') or data['duration_minutes'] > sched_dur:
+                data['duration_minutes'] = sched_dur
+            
         exam = await self.exam_repo.create(
             created_by=creator_id,
             status="DRAFT",
@@ -213,6 +323,13 @@ class ExamService:
             raise ExamNotFoundError(f"Exam {exam_id} not found.")
             
         update_data = exam_in.model_dump(exclude_unset=True)
+        self._validate_exam_business_rules(update_data, is_update=True, existing_exam=exam)
+
+        new_start = update_data.get('scheduled_start', exam.scheduled_start)
+        new_end = update_data.get('scheduled_end', exam.scheduled_end)
+        if ('scheduled_start' in update_data or 'scheduled_end' in update_data) and new_start and new_end:
+            update_data['duration_minutes'] = validate_schedule_rules(new_start, new_end)
+            
         updated_exam = await self.exam_repo.update(exam, **update_data)
         logger.info(f"Workspace Exam {exam_id} updated by user {creator_id}")
         return DomainExamResponse.model_validate(updated_exam)
@@ -301,16 +418,45 @@ class ExamService:
         return OldExamResponse.model_validate(exam)
 
     async def get_domain_exam(self, exam_id: int, user_id: int) -> DomainExamResponse:
+        from sqlalchemy import func
+        from app.models.exam_assignment import ExamAssignment
         exam = await self.exam_repo.get_by_id(exam_id)
         if not exam:
             raise ExamNotFoundError(f"Exam {exam_id} not found.")
-        # Optional: check if user_id is creator or assigned supervisor
-        return DomainExamResponse.model_validate(exam)
+            
+        count_res = await self.db.execute(
+            select(func.count(ExamAssignment.id)).where(ExamAssignment.exam_id == exam_id)
+        )
+        count = count_res.scalar() or 0
+
+        resp = DomainExamResponse.model_validate(exam)
+        resp.assigned_students_count = count
+        return resp
 
     async def list_domain_exams(self, user_id: int, skip: int = 0, limit: int = 100) -> List[DomainExamResponse]:
+        from sqlalchemy import func
+        from app.models.exam_assignment import ExamAssignment
         query = select(Exam).where(Exam.created_by == user_id).order_by(Exam.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return [DomainExamResponse.model_validate(e) for e in result.scalars().all()]
+        exams = result.scalars().all()
+
+        exam_ids = [e.id for e in exams]
+        count_map = {}
+        if exam_ids:
+            counts_res = await self.db.execute(
+                select(ExamAssignment.exam_id, func.count(ExamAssignment.id))
+                .where(ExamAssignment.exam_id.in_(exam_ids))
+                .group_by(ExamAssignment.exam_id)
+            )
+            count_map = dict(counts_res.all())
+
+        responses = []
+        for e in exams:
+            resp = DomainExamResponse.model_validate(e)
+            resp.assigned_students_count = count_map.get(e.id, 0)
+            responses.append(resp)
+
+        return responses
 
     async def get_assigned_students(self, exam_id: int, user_id: int) -> List[int]:
         exam = await self.exam_repo.get_by_id(exam_id)
@@ -321,6 +467,13 @@ class ExamService:
         return list(result.scalars().all())
 
     async def assign_repository_students(self, exam_id: int, student_ids: List[int], user_id: int) -> int:
+        from app.models.role import Role
+        from app.models.user import User
+        from app.models.exam_session import ExamSession
+        from app.services.credential_service import CredentialService
+        from app.services.password_service import PasswordService
+        from app.services.email_service import EmailService
+
         exam = await self.exam_repo.get_by_id(exam_id)
         if not exam or exam.created_by != user_id:
             raise ExamNotFoundError("Exam not found or unauthorized.")
@@ -329,17 +482,94 @@ class ExamService:
         existing_result = await self.db.execute(select(ExamAssignment.student_id).where(ExamAssignment.exam_id == exam_id))
         existing_ids = set(existing_result.scalars().all())
         
-        # We should also verify that the students belong to this user (examiner) in the Student repository
-        students_result = await self.db.execute(select(Student.id).where(Student.examiner_id == user_id, Student.id.in_(student_ids)))
-        valid_student_ids = set(students_result.scalars().all())
+        # Verify students belong to examiner
+        students_result = await self.db.execute(select(Student).where(Student.examiner_id == user_id, Student.id.in_(student_ids)))
+        valid_students = list(students_result.scalars().all())
         
-        new_ids = [sid for sid in valid_student_ids if sid not in existing_ids]
-        
-        for sid in new_ids:
-            self.db.add(ExamAssignment(exam_id=exam_id, student_id=sid))
+        # Fetch Student Role ID (case-insensitive to support 'Student' or 'STUDENT')
+        role_repo = RoleRepository(self.db)
+        student_role = await role_repo.get_by_name("STUDENT")
+        student_role_id = student_role.id if student_role else None
+
+        assigned_count = 0
+        for student in valid_students:
+            if student.id in existing_ids:
+                continue
+
+            # 1. Create ExamAssignment record
+            self.db.add(ExamAssignment(exam_id=exam_id, student_id=student.id))
+            assigned_count += 1
+
+            # 2. Check or Provision User Account
+            user_result = await self.db.execute(select(User).where(User.email == student.email))
+            candidate_user = user_result.scalar_one_or_none()
+
+            account_provisioned_now = False
+            if not candidate_user and student_role_id:
+                # Provision new User account
+                creds = CredentialService.provision_credentials()
+                password_hash = PasswordService.hash(creds.password)
+
+                candidate_user = User(
+                    role_id=student_role_id,
+                    full_name=student.full_name,
+                    email=student.email,
+                    phone_number=student.phone,
+                    password_hash=password_hash,
+                    is_active=True,
+                    account_status="ACTIVE",
+                    face_image_path=student.face_image_path,
+                    face_embedding=student.face_embedding,
+                    embedding_version=student.embedding_version or "v1"
+                )
+                self.db.add(candidate_user)
+                await self.db.flush()
+                account_provisioned_now = True
+
+                # Send Account Provisioning Email (ONCE)
+                try:
+                    await EmailService.send_account_provisioning_email(
+                        recipient_email=student.email,
+                        student_name=student.full_name,
+                        password_plain=creds.password
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not dispatch account provisioning email to {student.email}: {e}")
+            elif candidate_user:
+                # Sync face embedding to user if present on student record
+                if not candidate_user.face_embedding and student.face_embedding:
+                    candidate_user.face_image_path = student.face_image_path
+                    candidate_user.face_embedding = student.face_embedding
+                    candidate_user.embedding_version = student.embedding_version or "v1"
+
+            # 3. Create ExamSession runtime linkage if candidate_user exists
+            if candidate_user:
+                session_result = await self.db.execute(
+                    select(ExamSession).where(ExamSession.exam_id == exam_id, ExamSession.student_id == candidate_user.id)
+                )
+                if not session_result.scalar_one_or_none():
+                    new_session = ExamSession(
+                        exam_id=exam_id,
+                        student_id=candidate_user.id,
+                        status="PENDING"
+                    )
+                    self.db.add(new_session)
+
+            # 4. Send Exam Notification Email (without credentials)
+            try:
+                await EmailService.send_exam_notification_email(
+                    recipient_email=student.email,
+                    student_name=student.full_name,
+                    exam_name=exam.title,
+                    scheduled_start=exam.scheduled_start,
+                    duration_minutes=exam.duration_minutes,
+                    instructions=exam.description
+                )
+            except Exception as e:
+                logger.warning(f"Could not dispatch exam notification email to {student.email}: {e}")
             
         await self.db.commit()
-        return len(new_ids)
+        return assigned_count
 
     async def assign_supervisors(self, exam_id: int, supervisor_ids: List[int], user_id: int) -> int:
         exam = await self.exam_repo.get_by_id(exam_id)
@@ -483,15 +713,7 @@ class ExamService:
             raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
         if exam.status not in ["SCHEDULED", "READY"]:
             raise InvalidExamStateError(f"Cannot start exam from state {exam.status}.")
-
-        try:
-            # AI Orchestration
-            AISessionManager.initialize_session(exam.id, user_id)
-            AISessionManager.start_session(exam.id)
-            return await self._change_status(exam.id, "RUNNING")
-        except Exception as e:
-            logger.error(f"Failed to start AI Session for exam {exam_id}: {e}")
-            raise AISessionError("Failed to start AI Session.") from e
+        return await self._change_status(exam.id, "RUNNING")
 
     async def pause_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
@@ -500,12 +722,7 @@ class ExamService:
         if exam.status != "RUNNING":
             raise InvalidExamStateError("Only RUNNING exams can be paused.")
             
-        try:
-            AISessionManager.pause_session(exam.id)
-            return await self._change_status(exam.id, "PAUSED")
-        except Exception as e:
-            logger.error(f"Failed to pause AI Session for exam {exam_id}: {e}")
-            raise AISessionError("Failed to pause AI Session.") from e
+        return await self._change_status(exam.id, "PAUSED")
 
     async def resume_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
@@ -514,23 +731,19 @@ class ExamService:
         if exam.status != "PAUSED":
             raise InvalidExamStateError("Only PAUSED exams can be resumed.")
             
-        try:
-            AISessionManager.resume_session(exam.id)
-            return await self._change_status(exam.id, "RUNNING")
-        except Exception as e:
-            logger.error(f"Failed to resume AI Session for exam {exam_id}: {e}")
-            raise AISessionError("Failed to resume AI Session.") from e
+        return await self._change_status(exam.id, "RUNNING")
 
     async def complete_exam(self, exam_id: int, user_id: int) -> OldExamResponse:
         exam = await self.exam_repo.get_by_id(exam_id)
         if not exam or exam.created_by != user_id:
             raise ExamNotFoundError(f"Exam {exam_id} not found or unauthorized.")
-        if exam.status not in ["RUNNING", "PAUSED"]:
-            raise InvalidExamStateError("Only RUNNING or PAUSED exams can be completed.")
+        if exam.status not in ["RUNNING", "PAUSED", "READY", "SCHEDULED"]:
+            raise InvalidExamStateError("Only active or scheduled exams can be completed.")
             
-        try:
-            AISessionManager.stop_session(exam.id)
-            return await self._change_status(exam.id, "COMPLETED")
-        except Exception as e:
-            logger.error(f"Failed to stop AI Session for exam {exam_id}: {e}")
-            raise AISessionError("Failed to cleanly stop AI Session.") from e
+        from app.services.exam_lifecycle_service import ExamLifecycleService
+        lifecycle_service = ExamLifecycleService(self.db)
+        completed_exam = await lifecycle_service.complete_exam(exam_id, user_id=user_id)
+        
+        resp = OldExamResponse.model_validate(completed_exam)
+        resp.ai_session_status = "INACTIVE"
+        return resp

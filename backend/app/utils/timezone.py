@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import zoneinfo
 from app.core.config import settings
 
@@ -10,19 +10,26 @@ def get_utc_now() -> datetime:
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-def to_presentation_tz(dt_naive_utc: datetime) -> datetime:
+def to_presentation_tz(dt: datetime) -> datetime:
     """
-    Converts a naive UTC datetime to a timezone-aware datetime in the APP_TIMEZONE.
+    Converts a naive or aware UTC datetime to a timezone-aware datetime in the APP_TIMEZONE.
     Useful for formatting dates in emails or API responses.
     """
-    # First, make it aware in UTC
-    dt_aware_utc = dt_naive_utc.replace(tzinfo=timezone.utc)
+    if dt is None:
+        return None
+        
+    if dt.tzinfo is None:
+        dt_aware_utc = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt_aware_utc = dt.astimezone(timezone.utc)
     
-    # Convert to the target timezone
+    # Convert to target timezone (with fallback to UTC+5 for Asia/Karachi on Windows if tzdata missing)
     try:
         target_tz = zoneinfo.ZoneInfo(settings.APP_TIMEZONE)
     except Exception:
-        # Fallback to UTC if timezone is invalid
-        target_tz = timezone.utc
+        if settings.APP_TIMEZONE in ["Asia/Karachi", "PKT"]:
+            target_tz = timezone(timedelta(hours=5), name="PKT")
+        else:
+            target_tz = timezone.utc
         
     return dt_aware_utc.astimezone(target_tz)

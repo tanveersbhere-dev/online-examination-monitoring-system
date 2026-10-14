@@ -9,11 +9,15 @@ class EvidenceCreate(BaseModel):
     timestamp: Optional[datetime] = None
     metadata_payload: Optional[Dict[str, Any]] = None
     confidence_score: Optional[float] = None
+    is_primary: bool = False
+    replay_clip_path: Optional[str] = None
 
 class EvidenceUpdate(BaseModel):
     # Mostly for updating metadata or fixing file_path if it moved, but rare
     file_path: Optional[str] = None
     metadata_payload: Optional[Dict[str, Any]] = None
+    is_primary: Optional[bool] = None
+    replay_clip_path: Optional[str] = None
 
 class EvidenceResponse(BaseModel):
     id: int
@@ -23,6 +27,8 @@ class EvidenceResponse(BaseModel):
     timestamp: datetime
     metadata_payload: Optional[Dict[str, Any]] = None
     confidence_score: Optional[float] = None
+    is_primary: bool = False
+    replay_clip_path: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

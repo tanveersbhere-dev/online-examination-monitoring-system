@@ -69,3 +69,26 @@ Desktop.ini
 # Project Specific
 uploads/
 media/
+
+# AI Models, Weights, and Detection Runs
+models/
+weights/
+runs/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.task
+
+# Academic Thesis Documents, Reports, Personal Records & Scripts
+fyp-part1.*
+report/
+scratch/
+generate_*.py
+build_*_doc.py
+chapter_analysis.txt
+extracted_fyp1_text.txt
+architecture_diagram.*
+Chapter_4_Implementation.docx
+M_Faizan_Rabbani*
+*.docx

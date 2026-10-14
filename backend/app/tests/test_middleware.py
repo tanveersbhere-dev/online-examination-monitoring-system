@@ -7,7 +7,7 @@ def test_cors_headers(client):
     response = client.options(
         "/api/v1/health",
         headers={
-            "Origin": "http://localhost:3000",
+            "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "GET"
         }
     )

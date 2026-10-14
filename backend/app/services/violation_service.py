@@ -48,6 +48,7 @@ class ViolationService:
             raise ViolationNotFoundError(f"Violation {violation_id} not found.")
 
         valid_transitions = {
+            "ACTIVE": ["PENDING", "DISMISSED"],
             "PENDING": ["REVIEWED", "CONFIRMED", "DISMISSED"],
             "REVIEWED": ["CONFIRMED", "DISMISSED"],
             "CONFIRMED": ["DISMISSED"],

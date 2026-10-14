@@ -30,3 +30,28 @@ class MonitoringCurrentResponse(BaseModel):
     environment_summary: Dict[str, Any]
     active_violations: List[ViolationSchema]
     timeline_events: List[TimelineEventSchema]
+
+class ActiveMonitoringSessionItem(BaseModel):
+    session_id: int
+    exam_id: int
+    exam_title: str
+    student_id: int
+    student_name: str
+    student_reg_no: Optional[str] = None
+    start_time: Optional[datetime] = None
+    session_status: str
+    monitoring_status: str
+    current_risk: float
+    risk_level: str
+    active_violations_count: int
+    total_violations_count: int
+    latest_event: Optional[str] = None
+    camera_status: str = "CONNECTED"
+
+class MonitoringHealthResponse(BaseModel):
+    exam_session_id: int
+    thread_alive: bool
+    monitoring_status: str
+    frames_processed: int
+    current_risk: float
+    processor_health: Dict[str, Any] = {}

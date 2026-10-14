@@ -33,6 +33,8 @@ import WebcamIcon from '@mui/icons-material/Videocam';
 import MouseIcon from '@mui/icons-material/Mouse';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ShieldIcon from '@mui/icons-material/Shield';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import TabIcon from '@mui/icons-material/Tab';
 import apiClient from '../../services/apiClient';
 import { getErrorMessage } from '../../utils/errorHandler';
 
@@ -66,8 +68,10 @@ interface ExamDetails {
   id: number;
   title: string;
   course_name: string;
-  duration_minutes: number;
-  scheduled_start: string;
+  duration_minutes?: number;
+  paper_duration_minutes?: number;
+  scheduled_start?: string;
+  scheduled_end?: string;
 }
 
 const ExamInstructionsPage = () => {
@@ -80,6 +84,34 @@ const ExamInstructionsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleProceed = async () => {
+    if (!examId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const policyRes = await apiClient.get('/runtime/verification-policy', {
+        params: { exam_id: examId }
+      });
+      const { requires_verification, can_proceed, message } = policyRes.data;
+
+      if (requires_verification && !can_proceed) {
+        setError(message || "This exam requires identity verification, but no approved reference image is available for your account. Please contact your examiner.");
+        return;
+      }
+
+      if (!requires_verification) {
+        // Exam does NOT require identity verification, proceed to device check -> direct to exam
+        navigate(`/student/device-check?exam_id=${examId}&skip_identity=true`);
+      } else {
+        navigate(`/student/device-check?exam_id=${examId}`);
+      }
+    } catch (err: any) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!examId) {
       setError("No examination specified. Please return to your dashboard.");
@@ -90,7 +122,17 @@ const ExamInstructionsPage = () => {
     const fetchExam = async () => {
       try {
         const response = await apiClient.get(`/exams/${examId}`);
-        setExam(response.data);
+        const examData = response.data;
+        try {
+          const timeRes = await apiClient.get(`/runtime/effective-time?exam_id=${examId}`);
+          if (timeRes.data?.paper_duration_seconds) {
+            const paperMins = Math.round(timeRes.data.paper_duration_seconds / 60);
+            if (paperMins > 0) {
+              examData.paper_duration_minutes = paperMins;
+            }
+          }
+        } catch (e) {}
+        setExam(examData);
       } catch (err: any) {
         setError(getErrorMessage(err));
       } finally {
@@ -105,10 +147,29 @@ const ExamInstructionsPage = () => {
   
   if (error) return (
     <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
-      <Alert severity="error">{error}</Alert>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Examination Instructions & Regulations
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Please review the rules carefully before proceeding to your examination.
+        </Typography>
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
       <Button variant="outlined" sx={{ mt: 2 }} onClick={() => navigate('/student')}>Back to Dashboard</Button>
     </Box>
   );
+
+  const startDate = exam?.scheduled_start ? new Date(exam.scheduled_start) : null;
+  const endDate = exam?.scheduled_end ? new Date(exam.scheduled_end) : null;
+  let duration = exam?.paper_duration_minutes || exam?.duration_minutes || 0;
+  if (!duration && startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+    duration = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
+  }
+  const startTimeFormatted = startDate && !isNaN(startDate.getTime())
+    ? startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
 
   return (
     <Box>
@@ -133,12 +194,14 @@ const ExamInstructionsPage = () => {
                 <Box sx={{ display: 'flex', gap: 4 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">Duration</Typography>
-                    <Typography variant="body2" fontWeight={600}>{exam?.duration_minutes} Minutes</Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {duration > 0 ? `${duration} Minutes` : 'N/A'}
+                    </Typography>
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">Start Time</Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {exam && new Date(exam.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {startTimeFormatted}
                     </Typography>
                   </Box>
                 </Box>
@@ -155,6 +218,108 @@ const ExamInstructionsPage = () => {
       <Typography variant="body2" color="text.secondary" paragraph>
         Please read all instructions carefully. By continuing, you agree to comply with all rules and acknowledge that AI-based proctoring will be active during this examination.
       </Typography>
+
+      {/* ===== Controlled Examination Environment Warning ===== */}
+      <Paper
+        elevation={0}
+        sx={{
+          mb: 3,
+          border: '1.5px solid',
+          borderColor: 'warning.main',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Warning header */}
+        <Box
+          sx={{
+            px: 2.5,
+            py: 1.5,
+            bgcolor: '#FFF3E0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'warning.light',
+          }}
+        >
+          <WarningAmberIcon sx={{ color: 'warning.dark', fontSize: 22 }} />
+          <Typography variant="subtitle1" fontWeight={700} color="warning.dark">
+            Controlled Examination Environment
+          </Typography>
+        </Box>
+
+        {/* Warning body */}
+        <Box sx={{ px: 2.5, py: 2 }}>
+          <Typography variant="body2" color="text.primary" sx={{ mb: 1.5, lineHeight: 1.7 }}>
+            You are about to start a <strong>monitored examination</strong>. Once the examination
+            begins, you will be placed in <strong>fullscreen mode</strong>.
+          </Typography>
+
+          {/* Two key requirements as chips */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                p: 1,
+                borderRadius: 1,
+                bgcolor: '#FFF8E1',
+                border: '1px solid',
+                borderColor: 'warning.light',
+                flex: 1,
+              }}
+            >
+              <FullscreenIcon sx={{ color: 'warning.dark', fontSize: 20 }} />
+              <Box>
+                <Typography variant="caption" fontWeight={700} color="warning.dark" display="block">
+                  Stay in Fullscreen
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Exiting fullscreen is recorded as a HIGH-RISK violation
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                p: 1,
+                borderRadius: 1,
+                bgcolor: '#FFF8E1',
+                border: '1px solid',
+                borderColor: 'warning.light',
+                flex: 1,
+              }}
+            >
+              <TabIcon sx={{ color: 'warning.dark', fontSize: 20 }} />
+              <Box>
+                <Typography variant="caption" fontWeight={700} color="warning.dark" display="block">
+                  No Tab Switching
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Switching tabs or windows is recorded as a HIGH-RISK violation
+                </Typography>
+              </Box>
+            </Box>
+          </Stack>
+
+          <Alert
+            severity="error"
+            icon={<ShieldIcon fontSize="small" />}
+            sx={{ borderRadius: 1.5, py: 0.5 }}
+          >
+            <Typography variant="caption" fontWeight={600}>
+              Both violations are logged with timestamp and duration, and are immediately visible
+              to the examiner. Repeated violations may result in disqualification.
+            </Typography>
+          </Alert>
+        </Box>
+      </Paper>
+      {/* ===== End Controlled Examination Environment Warning ===== */}
 
       <Grid container spacing={4} sx={{ mb: 4 }}>
         {/* Rules List */}
@@ -224,12 +389,12 @@ const ExamInstructionsPage = () => {
         <Button
           variant="contained"
           size="large"
-          disabled={!accepted}
-          endIcon={<ArrowForwardIcon />}
-          onClick={() => navigate(`/student/device-check?exam_id=${examId}`)}
+          disabled={!accepted || loading}
+          endIcon={loading ? <CircularProgress size={20} /> : <ArrowForwardIcon />}
+          onClick={handleProceed}
           sx={{ px: 6, py: 1.5, borderRadius: 999 }}
         >
-          Proceed to Device Check
+          {loading ? 'Checking Policy...' : 'Proceed to Device Check'}
         </Button>
       </Box>
     </Box>

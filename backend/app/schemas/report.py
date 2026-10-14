@@ -36,27 +36,43 @@ class RiskSummary(BaseModel):
 
 class ViolationTimelineItem(BaseModel):
     timestamp: datetime
+    end_timestamp: Optional[datetime] = None
+    violation_id: Optional[int] = None
     violation_type: str
     category: str
     severity: str
     risk_score: float
+    max_risk_score: Optional[float] = None
+    duration_seconds: Optional[float] = 0.0
+    occurrences: int = 1
     short_description: Optional[str]
 
 class EvidenceItem(BaseModel):
     timestamp: datetime
     evidence_type: str
     file_path: str
+    violation_id: Optional[int] = None
+    violation_type: Optional[str] = None
+    confidence_score: Optional[float] = None
+    risk_score: Optional[float] = None
+    is_primary: Optional[bool] = False
+    replay_clip_path: Optional[str] = None
 
 class EvidenceGalleryItem(BaseModel):
     violation_id: int
+    violation_type: Optional[str] = None
+    timestamp: Optional[datetime] = None
+    confidence_score: Optional[float] = None
+    risk_score: Optional[float] = None
     snapshots: List[EvidenceItem]
 
 class ReportStatistics(BaseModel):
     total_phone_detections: int = 0
+    total_multiple_person: int = 0
+    total_book_detections: int = 0
     total_looking_away: int = 0
     total_identity_events: int = 0
     total_face_absence: int = 0
-    total_multiple_person: int = 0
     total_earphone_events: int = 0
     total_snapshots: int = 0
     total_violations: int = 0

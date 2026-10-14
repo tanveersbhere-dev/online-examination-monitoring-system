@@ -110,7 +110,7 @@ class WorkspaceService:
 
         # Upcoming Exams
         upcoming_result = await self.db.execute(
-            select(Exam).where(Exam.created_by == user_id).order_by(Exam.scheduled_start.desc()).limit(3)
+            select(Exam).where(Exam.created_by == user_id).order_by(Exam.scheduled_start.desc().nullslast()).limit(5)
         )
         exams = upcoming_result.scalars().all()
         
@@ -119,9 +119,9 @@ class WorkspaceService:
             upcoming_exams.append(UpcomingExam(
                 id=e.id,
                 name=e.title,
-                course=e.course_name or "N/A", 
+                course=e.course_name or e.subject or "General", 
                 scheduled_date=e.scheduled_start,
-                students_count=0 # Placeholder for session count
+                students_count=0
             ))
 
         # Activities & Notifications

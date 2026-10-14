@@ -10,13 +10,6 @@ logger = logging.getLogger(__name__)
 
 class CredentialService:
     @staticmethod
-    def generate_username() -> str:
-        """Generates a deterministic username e.g. STU-2026-1234"""
-        year = datetime.utcnow().year
-        suffix = ''.join(random.choices(string.digits, k=4))
-        return f"STU-{year}-{suffix}"
-
-    @staticmethod
     def generate_password(length: int = 12) -> str:
         """Generates a secure random password with mixed requirements."""
         if length < 10:
@@ -35,9 +28,9 @@ class CredentialService:
     def provision_credentials(cls) -> CredentialData:
         try:
             return CredentialData(
-                username=cls.generate_username(),
                 password=cls.generate_password()
             )
         except Exception as e:
             logger.error(f"Failed to provision credentials: {e}")
             raise CredentialGenerationError("Failed to generate secure credentials.") from e
+

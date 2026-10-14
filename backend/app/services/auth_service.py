@@ -10,6 +10,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user_auth import UserResponse, RoleResponse
 from app.repositories.user_repository import UserRepository
+from app.repositories.role_repository import RoleRepository
 from app.services.password_service import PasswordService
 from app.services.token_service import TokenService
 from app.services.otp_service import OTPService
@@ -44,8 +45,8 @@ class AuthService:
             }
         
         # Determine Role (Examiner by default or lookup by name)
-        result = await self.db.execute(select(Role).where(Role.name == "Examiner"))
-        role = result.scalars().first()
+        role_repo = RoleRepository(self.db)
+        role = await role_repo.get_by_name("Examiner")
         if not role:
             # Create a default Examiner role if it doesn't exist
             role = Role(name="Examiner", description="Examiner Role")
@@ -221,10 +222,17 @@ class AuthService:
 
     # ORIGINAL METHODS
     async def authenticate_user(self, login_data: LoginRequest) -> AuthResponse:
+        portal = (login_data.portal_type or "").upper()
         user = await self.user_repo.get_by_email(login_data.email)
+        
         if not user:
-            logger.warning(f"Failed login attempt for unknown user: {login_data.email}")
-            raise InvalidCredentialsError("Invalid email or password.")
+            logger.warning(f"Failed login attempt for unknown user: {login_data.email} on portal: {portal}")
+            if portal == "STUDENT":
+                raise InvalidCredentialsError("You are not registered as a student. Please contact your examiner or administrator.")
+            elif portal == "EXAMINER":
+                raise InvalidCredentialsError("You are not registered as an examiner. Please create an account or contact your administrator.")
+            else:
+                raise InvalidCredentialsError("You are not registered in the system. Please register or check your email.")
             
         if not user.is_active or user.account_status == "PENDING":
             logger.warning(f"Failed login attempt for inactive/pending user: {login_data.email}")
@@ -232,9 +240,15 @@ class AuthService:
             
         if not PasswordService.verify(login_data.password, user.password_hash):
             logger.warning(f"Failed login attempt (wrong password) for: {login_data.email}")
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError("Incorrect password. Please check your credentials and try again.")
 
         role_name = user.role.name if user.role else "UNKNOWN"
+
+        if portal == "STUDENT" and role_name.upper() != "STUDENT":
+            raise AuthorizationError("You are not registered as a student.")
+        elif portal == "EXAMINER" and role_name not in ["Examiner", "Admin"]:
+            raise AuthorizationError("You are not registered as an examiner.")
+
         token = TokenService.issue_tokens(str(user.id), role_name)
         
         logger.info(f"Successful login for user: {login_data.email}")

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import apiClient from '../../services/apiClient';
 import { getErrorMessage } from '../../utils/errorHandler';
@@ -25,6 +25,9 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import ShieldIcon from '@mui/icons-material/Shield';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EmailIcon from '@mui/icons-material/Email';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import TimerIcon from '@mui/icons-material/Timer';
+import SchoolIcon from '@mui/icons-material/School';
 
 const StudentLoginPage = () => {
   const navigate = useNavigate();
@@ -55,13 +58,15 @@ const StudentLoginPage = () => {
     try {
       const response = await apiClient.post('/auth/login', {
         email,
-        password
+        password,
+        portal_type: 'STUDENT'
       });
       
       const { access_token, refresh_token, user } = response.data;
       
-      if (user.role.name !== 'STUDENT') {
-        setError('Unauthorized role. You must be a student to access this portal.');
+      const roleName = user.role?.name;
+      if (roleName?.toUpperCase() !== 'STUDENT') {
+        setError('You are not registered as a student.');
         setIsLoading(false);
         return;
       }
@@ -78,97 +83,158 @@ const StudentLoginPage = () => {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        backgroundColor: 'background.default',
-      }}
-    >
-      {/* Left Panel */}
+    <Box sx={{ minHeight: '100vh', display: 'flex' }}>
+      {/* ── Left Panel — Student Brand ─────────────────────────────────── */}
       <Box
         sx={{
           width: { xs: 0, md: '40%' },
           display: { xs: 'none', md: 'flex' },
           flexDirection: 'column',
           justifyContent: 'center',
-          px: 6,
-          background: 'linear-gradient(160deg, #1565C0 0%, #0D47A1 100%)',
+          px: { md: 6, lg: 8 },
+          position: 'relative',
+          overflow: 'hidden',
+          // Distinct teal/emerald palette for student portal
+          background: 'linear-gradient(160deg, #0C2A3A 0%, #0B3549 50%, #073041 100%)',
           color: 'white',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 6 }}>
-          <ShieldIcon sx={{ fontSize: 36 }} />
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            ExamShield
-          </Typography>
-        </Box>
+        {/* Background orbs — teal accent */}
+        <Box sx={{
+          position: 'absolute', top: '-15%', right: '-15%',
+          width: 420, height: 420, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(14,165,233,0.25) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <Box sx={{
+          position: 'absolute', bottom: '-10%', left: '-12%',
+          width: 340, height: 340, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(5,150,105,0.18) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <Box sx={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)',
+          backgroundSize: '28px 28px',
+        }} />
 
-        <Typography variant="h3" sx={{ fontWeight: 700 }} gutterBottom>
-          Secure Exam Login
-        </Typography>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.25)', my: 3, width: 80 }} />
+        <Box sx={{ position: 'relative', zIndex: 1 }}>
+          {/* Brand */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 6 }}>
+            <Box sx={{
+              width: 42, height: 42, borderRadius: '12px',
+              background: 'linear-gradient(135deg, #0EA5E9, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(14,165,233,0.4)',
+            }}>
+              <ShieldIcon sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+              ExamShield
+            </Typography>
+          </Box>
 
-        {/* Exam Context Card */}
-        <Paper
-          elevation={0}
-          sx={{
-            backgroundColor: 'rgba(255,255,255,0.12)',
-            color: 'white',
-            p: 3,
-            borderRadius: 3,
-            mb: 4,
-          }}
-        >
-          <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mb: 1 }}>
-            You are logging in to:
+          <Typography
+            component="div"
+            sx={{
+              fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', mb: 1.5,
+            }}
+          >
+            Student Portal
           </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700 }} gutterBottom>
-            Data Structures & Algorithms
+          <Typography variant="h3" sx={{ fontWeight: 800, mb: 1.5, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+            Ready for<br />your exam?
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.8 }} gutterBottom>
-            CS-301
+          <Typography variant="body1" sx={{ opacity: 0.6, mb: 5, lineHeight: 1.7, maxWidth: 300 }}>
+            Sign in securely to begin your examination. Your session is monitored and encrypted.
           </Typography>
-          <Typography variant="caption" sx={{ opacity: 0.7 }}>
-            09:00 AM – 11:00 AM Today
-          </Typography>
-        </Paper>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, opacity: 0.7 }}>
-          <LockIcon fontSize="small" />
-          <Typography variant="caption">Your session is encrypted and monitored.</Typography>
+          <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 4 }} />
+
+          {/* Portal info card */}
+          <Paper
+            elevation={0}
+            sx={{
+              backgroundColor: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'white',
+              p: 3,
+              borderRadius: '14px',
+              mb: 4,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <SchoolIcon sx={{ fontSize: 16, opacity: 0.5 }} />
+              <Typography variant="caption" sx={{ opacity: 0.5, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Scheduled Examinations
+              </Typography>
+            </Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Access Your Assessment
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.6 }}>
+              Log in with your institutional credentials to view and attempt your scheduled examinations.
+            </Typography>
+          </Paper>
+
+          {/* Info badges */}
+          <Stack spacing={2}>
+            {[
+              { icon: <VerifiedUserIcon sx={{ fontSize: 16 }} />, text: 'AI-monitored session' },
+              { icon: <LockIcon sx={{ fontSize: 16 }} />, text: 'End-to-end encrypted' },
+              { icon: <TimerIcon sx={{ fontSize: 16 }} />, text: 'Auto-submit on timeout' },
+            ].map((item) => (
+              <Box key={item.text} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'rgba(255,255,255,0.45)' }}>
+                {item.icon}
+                <Typography variant="caption">{item.text}</Typography>
+              </Box>
+            ))}
+          </Stack>
         </Box>
       </Box>
 
-      {/* Right Panel — Form */}
+      {/* ── Right Panel — Form ────────────────────────────────────────────── */}
       <Box
         sx={{
           flexGrow: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          px: { xs: 3, md: 8 },
+          px: { xs: 3, sm: 5, md: 7, lg: 10 },
           py: 6,
+          backgroundColor: '#F8FAFC',
+          backgroundImage: 'radial-gradient(circle at 90% 10%, rgba(14,165,233,0.05) 0%, transparent 60%)',
         }}
       >
         <Box sx={{ width: '100%', maxWidth: 400 }}>
           {/* Mobile logo */}
-          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1, mb: 4 }}>
-            <ShieldIcon sx={{ color: 'primary.main', fontSize: 28 }} />
-            <Typography variant="h6" sx={{ fontWeight: 700 }} color="primary.main">
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.25, mb: 5 }}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: '10px',
+              background: 'linear-gradient(135deg, #0EA5E9, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(14,165,233,0.3)',
+            }}>
+              <ShieldIcon sx={{ fontSize: 20, color: 'white' }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>
               ExamShield
             </Typography>
           </Box>
 
-          <Typography variant="h4" sx={{ fontWeight: 600 }} gutterBottom>
+          <Typography variant="overline" sx={{ color: '#0EA5E9', fontWeight: 600, letterSpacing: '0.08em', mb: 0.75, display: 'block' }}>
+            Student Portal
+          </Typography>
+          <Typography variant="h4" sx={{ fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', mb: 0.75 }}>
             Student Login
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+          <Typography variant="body2" sx={{ color: '#64748B', mb: 4, lineHeight: 1.6 }}>
             Enter your credentials to begin the examination.
           </Typography>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+            <Alert severity="error" sx={{ mb: 3 }}>
               {error}
             </Alert>
           )}
@@ -177,15 +243,15 @@ const StudentLoginPage = () => {
             <TextField
               label="Email Address"
               placeholder="e.g. ahmed.raza@university.edu"
-              variant="outlined"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <EmailIcon fontSize="small" sx={{ color: '#94A3B8' }} />
                   </InputAdornment>
                 ),
               }}
@@ -194,19 +260,19 @@ const StudentLoginPage = () => {
             <TextField
               label="Password"
               type={showPassword ? 'text' : 'password'}
-              variant="outlined"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <LockIcon fontSize="small" sx={{ color: '#94A3B8' }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" disabled={isLoading}>
+                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" disabled={isLoading} sx={{ color: '#94A3B8' }}>
                       {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                     </IconButton>
                   </InputAdornment>
@@ -215,8 +281,8 @@ const StudentLoginPage = () => {
             />
 
             <FormControlLabel
-              control={<Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} disabled={isLoading} />}
-              label={<Typography variant="body2">Remember me on this device</Typography>}
+              control={<Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} disabled={isLoading} size="small" />}
+              label={<Typography variant="body2" sx={{ color: '#475569' }}>Remember me on this device</Typography>}
             />
 
             <Button
@@ -225,21 +291,26 @@ const StudentLoginPage = () => {
               fullWidth
               onClick={handleLogin}
               disabled={isLoading}
-              startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
-              sx={{ py: 1.5, fontSize: '1rem', borderRadius: 2 }}
+              startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : null}
+              sx={{
+                py: 1.5, fontSize: '0.9375rem',
+                // Student portal uses teal-to-emerald gradient
+                background: 'linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)',
+                '&:hover': { background: 'linear-gradient(135deg, #38BDF8 0%, #0EA5E9 100%)' },
+              }}
             >
-              {isLoading ? 'Authenticating...' : 'Login'}
+              {isLoading ? 'Authenticating…' : 'Login to Exam Portal'}
             </Button>
           </Stack>
 
           <Box sx={{ textAlign: 'center', mt: 3 }}>
             <Button
               startIcon={<ArrowBackIcon fontSize="small" />}
-              onClick={() => navigate('/student')}
-              sx={{ color: 'text.secondary' }}
+              onClick={() => navigate('/')}
+              sx={{ color: '#94A3B8', fontWeight: 500, '&:hover': { color: '#475569', backgroundColor: 'rgba(0,0,0,0.04)' } }}
               disabled={isLoading}
             >
-              Back to Today's Exams
+              Back to Home
             </Button>
           </Box>
         </Box>

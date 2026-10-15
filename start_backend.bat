@@ -9,7 +9,7 @@ echo.
 
 set "PROJECT_ROOT=%~dp0"
 cd /d "%PROJECT_ROOT%backend"
-set "PYTHONPATH=%PROJECT_ROOT%;%PROJECT_ROOT%backend;%PROJECT_ROOT%ai_monitoring_playground;%PROJECT_ROOT%ai_monitoring_playground\backend;%PYTHONPATH%"
+set "PYTHONPATH=%PROJECT_ROOT%;%PROJECT_ROOT%backend;%PROJECT_ROOT%ai-monitoring;%PROJECT_ROOT%ai-monitoring\backend;%PROJECT_ROOT%ai_monitoring_playground;%PROJECT_ROOT%ai_monitoring_playground\backend;%PYTHONPATH%"
 
 :: Check for virtual environment in backend\venv
 if exist "venv\Scripts\activate.bat" (

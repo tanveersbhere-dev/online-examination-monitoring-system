@@ -1,0 +1,35 @@
+face:
+  min_confidence: 0.5
+  max_faces: 1
+  face_absent_timeout: 3.0
+
+gaze:
+  deviation_threshold: 0.25
+  look_away_timeout: 2.0
+
+head_pose:
+  yaw_limit: 30.0
+  pitch_limit: 20.0
+  roll_limit: 20.0
+
+mouth:
+  open_threshold: 0.15
+  talking_timeout: 1.5
+
+objects:
+  confidence_threshold: 0.4
+  disallowed_objects:
+    - "cell phone"
+    - "mobile phone"
+    - "book"
+    - "laptop"
+    - "person"
+
+audio:
+  voice_activity_threshold: 0.5
+  decibel_threshold: -30.0
+
+risk:
+  low_threshold: 0.3
+  medium_threshold: 0.6
+  high_threshold: 0.8

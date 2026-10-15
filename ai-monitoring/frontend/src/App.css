@@ -1,0 +1,147 @@
+.app-shell {
+  display: grid;
+  grid-template-rows: var(--header-h) 1fr var(--timeline-h) var(--statusbar-h);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(7, 8, 14, 0.95);
+  border-bottom: 1px solid var(--border-subtle);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+}
+
+.calib-trigger-btn {
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  color: #00e676;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.2s ease;
+}
+
+.calib-trigger-btn:hover {
+  background: rgba(0, 230, 118, 0.25);
+}
+
+.submit-monitoring-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.submit-monitoring-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.submit-monitoring-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header__logo {
+  font-size: 20px;
+  color: var(--accent-cyan);
+  line-height: 1;
+  filter: drop-shadow(0 0 8px var(--accent-cyan));
+}
+
+.app-header__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.app-header__subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.app-header__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header__status-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.app-header__frame {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+/* ── Main grid ──────────────────────────────────────────────────── */
+.app-main {
+  display: grid;
+  grid-template-columns: 1fr 360px var(--evidence-w);
+  gap: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.app-camera {
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.app-monitoring {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.app-evidence {
+  overflow: hidden;
+}
+
+/* ── Timeline ───────────────────────────────────────────────────── */
+.app-timeline {
+  border-top: 1px solid var(--border-subtle);
+  overflow: hidden;
+  background: rgba(7, 8, 14, 0.9);
+}

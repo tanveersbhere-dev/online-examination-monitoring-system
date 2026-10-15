@@ -1,0 +1,51 @@
+.calib-debug-hud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 100;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  user-select: none;
+}
+
+.calib-debug-hud__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.calib-debug-hud__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.calib-debug-hud__title {
+  font-weight: 600;
+}
+
+.calib-debug-hud__arrow {
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+.calib-debug-hud__content {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calib-debug-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}

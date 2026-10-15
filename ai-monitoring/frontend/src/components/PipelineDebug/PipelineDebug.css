@@ -1,0 +1,121 @@
+.pipeline-debug {
+  flex-shrink: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  margin: 0;
+}
+
+.pipeline-debug__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.pipeline-debug__toggle:hover { background: rgba(255,255,255,0.02); }
+
+.pipeline-debug__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pipeline-debug__counts {
+  display: flex;
+  gap: 4px;
+}
+
+.pipeline-debug__chevron {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* Table */
+.pipeline-debug__table-wrap {
+  max-height: 220px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pipeline-debug__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.pipeline-debug__table thead tr {
+  background: rgba(0,0,0,0.3);
+}
+
+.pipeline-debug__table th {
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.proc-row td {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+}
+
+.proc-row--FAILED    { background: rgba(255,68,68,0.04); }
+.proc-row--SKIPPED   { background: rgba(255,152,0,0.03); }
+.proc-row--NOT_INITIALIZED { opacity: 0.5; }
+
+.proc-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proc-row__idx {
+  font-family: var(--text-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  width: 16px;
+}
+
+.proc-row__icon {
+  font-size: 12px;
+}
+
+.proc-row__time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.proc-row__note { max-width: 0; overflow: hidden; }
+
+.proc-row__err {
+  color: var(--accent-red);
+  font-size: 10px;
+  cursor: help;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proc-row__skip {
+  color: var(--accent-orange);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

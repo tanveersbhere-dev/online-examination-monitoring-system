@@ -1,0 +1,158 @@
+.mobile-camera-view {
+  min-height: 100vh;
+  background-color: #0b0f19;
+  color: #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.mobile-camera-header {
+  margin-bottom: 12px;
+}
+
+.mobile-camera-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mobile-camera-title h1 {
+  font-size: 1.15rem;
+  margin: 0;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.mobile-camera-status-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+}
+
+.mobile-camera-status-badge.connected {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.mobile-camera-status-badge.connecting {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.mobile-camera-status-badge.disconnected,
+.mobile-camera-status-badge.error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.mobile-camera-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.mobile-camera-feed-container {
+  position: relative;
+  flex: 1;
+  min-height: 340px;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mobile-camera-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.mobile-camera-error {
+  position: absolute;
+  inset: 0;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.95);
+  color: #f87171;
+  font-size: 0.9rem;
+}
+
+.mobile-camera-controls {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.mobile-btn-primary {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.mobile-btn-danger {
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.mobile-instructions {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mobile-instructions h3 {
+  margin: 0 0 6px 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.mobile-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+

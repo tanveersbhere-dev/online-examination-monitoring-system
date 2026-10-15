@@ -92,3 +92,26 @@ architecture_diagram.*
 Chapter_4_Implementation.docx
 M_Faizan_Rabbani*
 *.docx
+
+# Media, Audio & Video Recordings
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.flac
+*.webm
+evidence/
+artifacts/
+backups/
+
+# Report, Prompt and Temporary Files
+CLEANUP_REPORT.md
+DEPENDENCY_CLEANUP_CANDIDATES.md
+prompt_dump.txt
+*_REPORT.md
+*_AUDIT.md
+*_PLAN.md
+*_INVESTIGATION.md
+

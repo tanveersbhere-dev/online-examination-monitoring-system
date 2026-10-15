@@ -1,0 +1,68 @@
+.audio-debug-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  max-width: 250px;
+}
+
+.audio-debug-hud__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.audio-debug-hud__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.audio-debug-hud__title {
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.audio-debug-hud__arrow {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.audio-debug-hud__content {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.audio-debug-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.audio-debug-section__title {
+  font-size: 0.70rem;
+  font-weight: bold;
+  color: #38bdf8;
+  margin-bottom: 2px;
+}
+
+.audio-debug-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.72rem;
+}
